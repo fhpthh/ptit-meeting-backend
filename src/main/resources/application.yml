@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: ptit-meeting-backend
+
+  liquibase:
+    enabled: false
