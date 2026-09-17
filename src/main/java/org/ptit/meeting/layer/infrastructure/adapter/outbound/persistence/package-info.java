@@ -1,0 +1,1 @@
+package org.ptit.meeting.layer.infrastructure.adapter.outbound.persistence;
