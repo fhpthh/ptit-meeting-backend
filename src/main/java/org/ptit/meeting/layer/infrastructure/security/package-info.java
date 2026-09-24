@@ -1,1 +1,0 @@
-package org.ptit.meeting.layer.infrastructure.security;
