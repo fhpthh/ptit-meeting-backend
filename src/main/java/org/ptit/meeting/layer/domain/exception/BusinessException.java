@@ -10,4 +10,7 @@ public class BusinessException extends BaseException{
   public BusinessException(ErrorCode errorCode, String customMessage, Object... params) {
     super(errorCode, customMessage, params);
   }
+
+  public BusinessException() {
+  }
 }
