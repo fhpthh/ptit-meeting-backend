@@ -9,6 +9,15 @@ public class MessageKeyConstant {
   public static final String AUTH_UNAUTHORIZED = "auth.unauthorized";
   public static final String SYSTEM_INTERNAL_ERROR = "system.internal_error";
   public static final String ATTACHMENT_FILE_TOO_LARGE = "attachment.file_too_large";
+
+  // Auth messages
+  public static final String AUTH_LOGIN_SUCCESS = "auth.login_success";
+  public static final String AUTH_MUST_CHANGE_PASSWORD = "auth.must_change_password";
+  public static final String AUTH_CHANGE_PASSWORD_SUCCESS = "auth.change_password_success";
+  public static final String AUTH_GET_PROFILE_SUCCESS = "auth.get_profile_success";
+  public static final String AUTH_OUTLOOK_LOGIN_SUCCESS = "auth.outlook_login_success";
+  public static final String AUTH_OUTLOOK_URL_SUCCESS = "auth.outlook_url_success";
+
   private MessageKeyConstant() {
   }
 }

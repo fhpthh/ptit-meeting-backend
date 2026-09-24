@@ -1,6 +1,85 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+
 spring:
   application:
     name: ptit-meeting-backend
 
+  # 1. TẮT HOÀN TOÀN LIQUIBASE
   liquibase:
     enabled: false
+
+  # 2. CẤU HÌNH KẾT NỐI MYSQL
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ptit_meeting?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:huepth}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  # 3. CẤU HÌNH JPA / HIBERNATE (CHỐNG MẤT DỮ LIỆU)
+  jpa:
+    hibernate:
+      # validate: Chỉ kiểm tra cấu trúc bảng với Java Entity, TUYỆT ĐỐI KHÔNG TỰ SỬA/DROP BẢNG
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # 4. CẤU HÌNH KẾT NỐI REDIS (Lưu Refresh Token, Blacklist, Rate Limiting)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+  # 5. CẤU HÌNH TẢI FILE (Phục vụ import Excel TKB và Video bài giảng)
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  # 6. CẤU HÌNH ĐA NGÔN NGỮ (i18n)
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+    cache-duration: 60s
+
+# 7. CẤU HÌNH MICROSOFT OUTLOOK SSO (AZURE AD / ENTRA ID)
+azure:
+  activedirectory:
+    client-id: ${AZURE_AD_CLIENT_ID:your-client-id-here}
+    client-secret: ${AZURE_AD_CLIENT_SECRET:your-client-secret-here}
+    tenant-id: ${AZURE_AD_TENANT_ID:common} # Hoặc ID Tenant của PTIT
+    redirect-uri: ${AZURE_AD_REDIRECT_URI:http://localhost:3000/auth/callback}
+    # Endpoint đổi Code lấy Token và Endpoint lấy thông tin người dùng
+    token-url: https://login.microsoftonline.com/${azure.activedirectory.tenant-id}/oauth2/v2.0/token
+    graph-user-info-url: https://graph.microsoft.com/v1.0/me
+
+# 8. CẤU HÌNH BẢO MẬT & JWT TOKEN
+application:
+  security:
+    jwt:
+      # Khóa bí mật ký token HMAC-SHA256 (tối thiểu 256-bit, nên đổi khi lên Production)
+      secret-key: ${JWT_SECRET_KEY:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:1800000}      # 30 phút (30 * 60 * 1000)
+      refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 ngày (7 * 24 * 60 * 60 * 1000)
+
+# 9. CẤU HÌNH LOGGING
+logging:
+  level:
+    root: INFO
+    org.ptit.meeting: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
