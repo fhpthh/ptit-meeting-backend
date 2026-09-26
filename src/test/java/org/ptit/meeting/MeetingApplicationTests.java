@@ -139,4 +139,87 @@ class MeetingApplicationTests {
         .andExpect(jsonPath("$.data.email").value("gv001@ptit.edu.vn"))
         .andExpect(jsonPath("$.data.roles[0]").value("ROLE_LECTURER"));
   }
+
+  @Test
+  @Order(7)
+  @DisplayName("Test 6: Làm mới phiên đăng nhập qua POST /api/v1/auth/refresh với Refresh Token")
+  void testRefreshTokenSuccess() throws Exception {
+    String loginBody = """
+        {
+          "username": "GV001",
+          "password": "Ptit@123"
+        }
+        """;
+
+    String responseString = mockMvc.perform(post("/api/v1/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginBody))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+    com.fasterxml.jackson.databind.JsonNode rootNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(responseString);
+    String refreshToken = rootNode.path("data").path("refreshToken").asText();
+
+    String refreshBody = String.format("{\"refreshToken\": \"%s\"}", refreshToken);
+
+    mockMvc.perform(post("/api/v1/auth/refresh")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(refreshBody))
+        .andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value(200))
+        .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+        .andExpect(jsonPath("$.data.refreshToken").isNotEmpty());
+  }
+
+  @Test
+  @Order(8)
+  @DisplayName("Test 7: Đăng xuất an toàn: Thu hồi Refresh Token & Blacklist Access Token")
+  void testLogoutAndTokenBlacklisted() throws Exception {
+    String loginBody = """
+        {
+          "username": "GV001",
+          "password": "Ptit@123"
+        }
+        """;
+
+    String responseString = mockMvc.perform(post("/api/v1/auth/login")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(loginBody))
+        .andExpect(status().isOk())
+        .andReturn()
+        .getResponse()
+        .getContentAsString();
+
+    com.fasterxml.jackson.databind.JsonNode rootNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(responseString);
+    String accessToken = rootNode.path("data").path("accessToken").asText();
+    String refreshToken = rootNode.path("data").path("refreshToken").asText();
+
+    // 1. Thực hiện Logout
+    String logoutBody = String.format("{\"refreshToken\": \"%s\"}", refreshToken);
+    mockMvc.perform(post("/api/v1/auth/logout")
+            .header("Authorization", "Bearer " + accessToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(logoutBody))
+        .andDo(print())
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value(200));
+
+    // 2. Kiểm tra Access Token cũ đã bị Blacklist chặn
+    mockMvc.perform(get("/api/v1/auth/me")
+            .header("Authorization", "Bearer " + accessToken))
+        .andDo(print())
+        .andExpect(status().isUnauthorized());
+
+    // 3. Kiểm tra Refresh Token cũ đã bị thu hồi khỏi Redis
+    String refreshBody = String.format("{\"refreshToken\": \"%s\"}", refreshToken);
+    mockMvc.perform(post("/api/v1/auth/refresh")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(refreshBody))
+        .andDo(print())
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.apiError.code").value("AUTH_007"));
+  }
 }
