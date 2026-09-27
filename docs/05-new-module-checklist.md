@@ -93,7 +93,8 @@ chỉ tạo khi use case yêu cầu; không tạo class rỗng để “dự ph�
 
 - [ ] Module có package `constant` và class `<Feature>ErrorConstants`.
 - [ ] Error key riêng module nằm trong `*ErrorConstants`.
-- [ ] Message key đã được thêm vào `messages.properties`.
+- [ ] Message key đã được thêm vào `i18n/messages.properties` và tất cả bundle locale đang hỗ trợ.
+- [ ] DTO validation dùng `{message.key}`, không hardcode nội dung theo một ngôn ngữ.
 - [ ] Dùng `BusinessException` và `StatusCode` hiện có.
 - [ ] Không tạo `ErrorCode`, `CommonErrorCode` hoặc wrapper lỗi mới.
 

@@ -13,6 +13,11 @@ phải đọc tài liệu trước khi tạo module mới hoặc thay đổi ki�
 4. [04-error-response-conventions.md](./04-error-response-conventions.md): response, exception và message.
 5. [05-new-module-checklist.md](./05-new-module-checklist.md): quy trình và checklist thêm module.
 
+## Ngoại lệ có chủ đích
+
+- [06-auth-legacy-migration.md](./06-auth-legacy-migration.md): ngoại lệ tạm thời của module `auth`
+  nhằm giữ nguyên luồng đăng nhập đã có trong source tham chiếu.
+
 ## Quy trình bắt buộc dành cho AI
 
 Trước khi sửa source, AI phải:
@@ -35,4 +40,5 @@ Không duy trì hai convention song song.
 - API không nhận hoặc trả trực tiếp JPA Entity.
 - Lỗi nghiệp vụ: `BusinessException + StatusCode + strCode`.
 - Response API: `BaseResponse<T>`.
+- Message và validation: chỉ dùng bundle `src/main/resources/i18n/messages*.properties`.
 - Không khôi phục cấu trúc hexagonal `layer/domain/application/infrastructure`.

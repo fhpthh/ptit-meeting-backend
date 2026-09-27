@@ -13,10 +13,27 @@ Mọi API trả về wrapper `BaseResponse<T>` với cấu trúc:
 }
 ```
 
+`ApiError` cũng nằm trong `common.wrapper` và chỉ xuất hiện khi response lỗi cần mã lỗi cùng
+thông tin chi tiết:
+
+```json
+{
+  "code": "400",
+  "strCode": "validation.invalid_input",
+  "message": "Dữ liệu đầu vào không hợp lệ",
+  "apiError": {
+    "code": "validation.invalid_input",
+    "message": "Dữ liệu đầu vào không hợp lệ",
+    "details": {}
+  }
+}
+```
+
 Cách dùng:
 
 ```java
 return BaseResponse.success(response);
+return BaseResponse.success("Created successfully", response);
 return BaseResponse.created(response);
 return BaseResponse.success("Created successfully");
 ```
@@ -60,14 +77,16 @@ public final class RoomErrorConstants {
 }
 ```
 
-Message tương ứng đặt trong `src/main/resources/messages.properties`:
+Message tương ứng phải có trong `src/main/resources/i18n/messages.properties` và mọi bundle locale,
+ví dụ `src/main/resources/i18n/messages_vi.properties`:
 
 ```properties
 error.room.not-found=Phòng họp không tồn tại
 error.room.code-existed=Mã phòng họp đã tồn tại
 ```
 
-Khi bổ sung ngôn ngữ khác, tạo `messages_<locale>.properties` với cùng tập key.
+Khi bổ sung ngôn ngữ khác, tạo `src/main/resources/i18n/messages_<locale>.properties` với cùng tập
+key. Không tạo hoặc sử dụng bundle song song tại `src/main/resources/messages.properties`.
 
 Không đặt key của module vào `common.constant.ErrorConstants`. `ErrorConstants` chỉ dành cho
 lỗi dùng chung toàn hệ thống; key nào thuộc nghiệp vụ phải nằm trong module sở hữu.
@@ -106,6 +125,8 @@ Nếu không có factory phù hợp, có thể gọi constructor với `StatusCo
 - Dùng `MessageUtil` tra `strCode` trong message bundle.
 - Chọn HTTP status từ `StatusCode`.
 - Đóng gói lỗi bằng `BaseResponse.error(...)`.
+- Đưa field-level details vào `ApiError` bằng overload
+  `BaseResponse.error(code, strCode, message, details)`.
 - Chuyển lỗi validation và dữ liệu sai định dạng thành response thống nhất.
 - Che thông tin lỗi nội bộ khi gặp exception chưa dự kiến.
 
@@ -123,8 +144,9 @@ public record RoomCreateRequest(
 }
 ```
 
-Message key phải có trong `messages.properties`. Validation cần database hoặc phụ thuộc trạng
-thái hiện tại không đặt trong annotation; kiểm tra tại service và ném `BusinessException`.
+Message key phải có trong toàn bộ bundle `src/main/resources/i18n/messages*.properties`.
+Validation cần database hoặc phụ thuộc trạng thái hiện tại không đặt trong annotation; kiểm tra
+tại service và ném `BusinessException`.
 
 ## 7. Điều không được làm
 

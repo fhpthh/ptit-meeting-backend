@@ -37,6 +37,8 @@ public class RoomController {
 - Response chỉ chứa dữ liệu API công khai.
 - Không dùng entity làm request/response.
 - Validation hình thức (`@NotNull`, `@NotBlank`, `@Size`,...) đặt trên request.
+- Message của Jakarta Validation phải dùng key dạng `{validation.<feature>.<field>.<rule>}` và
+  được khai báo trong các bundle dưới `src/main/resources/i18n/`; không hardcode câu chữ trong DTO.
 - Validation nghiệp vụ cần database hoặc trạng thái hệ thống đặt trong service.
 - Không đặt repository/service vào DTO.
 - Không tái sử dụng cùng một request cho create và update nếu quy tắc validation khác nhau.
@@ -98,14 +100,25 @@ public interface RoomService {
 - Không tạo enum `ErrorCode` hoặc `CommonErrorCode`. Error key là string constant; loại response
   dùng `StatusCode` hiện có.
 
-## 8. Integration và utility
+## 8. Message và i18n
+
+- Toàn bộ message runtime đặt dưới `src/main/resources/i18n/`.
+- `i18n/messages.properties` là bundle mặc định bằng tiếng Anh.
+- `i18n/messages_vi.properties` là bundle tiếng Việt và là locale mặc định của hệ thống.
+- Client chọn ngôn ngữ bằng header `Accept-Language`; các locale đang hỗ trợ là `vi` và `en`.
+- Mọi bundle locale phải có cùng tập key; không tạo thêm `src/main/resources/messages.properties`.
+- Business exception truyền message key, không truyền câu chữ đã dịch hoặc hardcode tiếng Việt.
+- Controller cần thông báo thành công phải tra key qua `MessageSource`, `MessageUtil` hoặc adapter
+  hiện có của module.
+
+## 9. Integration và utility
 
 - Không gọi trực tiếp SDK bên ngoài từ controller.
 - Secret, endpoint và credential phải lấy từ configuration/environment, không hardcode.
 - Utility phải stateless và không chứa nghiệp vụ của một feature.
 - Nếu helper chỉ phục vụ một module, đặt nó trong module thay vì `utils`.
 
-## 9. Chất lượng và test
+## 10. Chất lượng và test
 
 - Mỗi business rule quan trọng phải có unit test ở service.
 - Custom query cần integration test khi có thể.

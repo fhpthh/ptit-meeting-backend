@@ -53,7 +53,8 @@ public class GlobalExceptionHandler {
     return ResponseEntity.badRequest().body(BaseResponse.error(
         StatusCode.INVALID_INPUT_DATA.getCode(),
         ErrorConstants.INVALID_INPUT,
-        errors.toString()
+        messageUtil.getMessage(ErrorConstants.INVALID_INPUT),
+        errors
     ));
   }
 

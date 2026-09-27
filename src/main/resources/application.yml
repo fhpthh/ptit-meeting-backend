@@ -4,3 +4,51 @@ spring:
 
   liquibase:
     enabled: false
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ptit_meeting?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+azure:
+  activedirectory:
+    client-id: ${AZURE_AD_CLIENT_ID:}
+    client-secret: ${AZURE_AD_CLIENT_SECRET:}
+    tenant-id: ${AZURE_AD_TENANT_ID:common}
+    redirect-uri: ${AZURE_AD_REDIRECT_URI:http://localhost:3000/auth/callback}
+    token-url: https://login.microsoftonline.com/${azure.activedirectory.tenant-id}/oauth2/v2.0/token
+    graph-user-info-url: https://graph.microsoft.com/v1.0/me
+
+application:
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET_KEY}
+      access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:1800000}
+      refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
