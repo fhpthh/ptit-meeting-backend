@@ -47,7 +47,7 @@ public class JwtTokenProvider {
         .claims(claims)
         .issuedAt(now)
         .expiration(accessExpiry)
-        .signWith(key, Jwts.SIG.HS512)
+        .signWith(key, Jwts.SIG.HS256)
         .compact();
 
     return TokenPairDto.builder()
