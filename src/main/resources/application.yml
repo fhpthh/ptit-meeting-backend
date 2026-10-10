@@ -41,7 +41,7 @@ azure:
   activedirectory:
     client-id: ${AZURE_AD_CLIENT_ID:}
     client-secret: ${AZURE_AD_CLIENT_SECRET:}
-    tenant-id: ${AZURE_AD_TENANT_ID:common}
+    tenant-id: common
     redirect-uri: ${AZURE_AD_REDIRECT_URI:http://localhost:3000/auth/callback}
     token-url: https://login.microsoftonline.com/${azure.activedirectory.tenant-id}/oauth2/v2.0/token
     graph-user-info-url: https://graph.microsoft.com/v1.0/me
