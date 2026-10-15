@@ -29,6 +29,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
   private final Map<String, Integer> colIndexMap = new HashMap<>();
   private final Map<Integer, Integer> weekToColMap = new HashMap<>(); // Tuần (1..25) -> Cột index
   private int dataStartRow = 12;
+  private int headerRowIndex = 6;
 
   @Override
   public ImportType getSupportedType() {
@@ -40,10 +41,10 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     colIndexMap.clear();
     weekToColMap.clear();
 
-    int headerRowIndex = scanHeaderRow(sheet);
-    mapCoreColumns(sheet.getRow(headerRowIndex));
-    mapWeekColumnsByNumber(sheet, headerRowIndex);
-    determineDataStartRow(sheet, headerRowIndex);
+    this.headerRowIndex = scanHeaderRow(sheet);
+    mapCoreColumns(sheet.getRow(this.headerRowIndex));
+    mapWeekColumnsByNumber(sheet, this.headerRowIndex);
+    determineDataStartRow(sheet, this.headerRowIndex);
   }
 
   private int scanHeaderRow(Sheet sheet) {
@@ -67,11 +68,11 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
         }
       }
       if (hasSubject && hasDay && hasPeriod) {
-        log.info("(scanHeaderRow) Đã phát hiện dòng tiêu đề TKB tại dòng {} (index={})", r + 1, r);
+        log.info("(scanHeaderRow) Found timetable header row at line {} (index={})", r + 1, r);
         return r;
       }
     }
-    log.error("(scanHeaderRow) Không tìm thấy dòng tiêu đề hợp lệ trong 25 dòng đầu tiên của file Excel!");
+    log.error("(scanHeaderRow) Could not find valid header row within the first 25 rows of Excel file!");
     throw BusinessException.invalidInputFile(TimetableErrorConstants.EXCEL_HEADER_INVALID);
   }
 
@@ -106,7 +107,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
         colIndexMap.putIfAbsent(TimetableConstants.HEADER_CREDIT, c);
       }
     }
-    log.info("(mapCoreColumns) Đã ánh xạ các cột: {}", colIndexMap);
+    log.info("(mapCoreColumns) Mapped core columns: {}", colIndexMap);
   }
 
   private void mapWeekColumnsByNumber(Sheet sheet, int headerRowIndex) {
@@ -135,7 +136,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
               break;
             }
           }
-          log.info("(mapWeekColumnsByNumber) Tìm thấy {} tuần học tại dòng {} (index={})", weekToColMap.size(), r + 1, r);
+          log.info("(mapWeekColumnsByNumber) Found {} study weeks at line {} (index={})", weekToColMap.size(), r + 1, r);
           return;
         }
       }
@@ -155,12 +156,27 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       }
       this.dataStartRow++;
     }
-    log.info("(determineDataStartRow) Dòng bắt đầu dữ liệu TKB: dòng {} (index={})", this.dataStartRow + 1, this.dataStartRow);
+    log.info("(determineDataStartRow) Timetable data starts at line {} (index={})", this.dataStartRow + 1, this.dataStartRow);
   }
 
   @Override
   public int getDataStartRow() {
     return this.dataStartRow;
+  }
+
+  @Override
+  public int getHeaderRowIndex() {
+    return this.headerRowIndex;
+  }
+
+  @Override
+  public int getDetectedWeeksCount() {
+    return this.weekToColMap.size();
+  }
+
+  @Override
+  public int getMappedColumnsCount() {
+    return this.colIndexMap.size();
   }
 
   @Override
@@ -205,7 +221,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
           .isOnline(isOnline)
           .build();
     } catch (Exception e) {
-      errors.add(new ImportRowError(rowNumber, "Lỗi đọc dữ liệu: " + e.getMessage()));
+      errors.add(new ImportRowError(rowNumber, "Error reading row data: " + e.getMessage()));
       return null;
     }
   }
@@ -229,11 +245,11 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       return false;
     }
     if (data.getSubjectCode() == null || data.getSubjectCode().isBlank()) {
-      errors.add(new ImportRowError(rowNumber, "Mã môn học không được để trống"));
+      errors.add(new ImportRowError(rowNumber, "Subject code cannot be blank"));
       return false;
     }
     if (data.getActiveWeeks() == null || data.getActiveWeeks().isEmpty()) {
-      errors.add(new ImportRowError(rowNumber, "Không có tuần học nào được đánh dấu 'x'"));
+      errors.add(new ImportRowError(rowNumber, "No active weeks marked with 'x'"));
       return false;
     }
     return true;

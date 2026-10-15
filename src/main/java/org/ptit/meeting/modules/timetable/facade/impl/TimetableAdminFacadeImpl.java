@@ -17,6 +17,10 @@ import org.ptit.meeting.modules.timetable.constant.enums.ImportType;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
 import org.ptit.meeting.modules.timetable.dto.response.ImportResultResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
+import java.time.LocalDateTime;
+import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
+import org.ptit.meeting.modules.timetable.entity.Semester;
+import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.entity.ImportHistory;
 import org.ptit.meeting.modules.timetable.facade.TimetableAdminFacade;
 import org.ptit.meeting.modules.timetable.repository.ImportHistoryRepository;
@@ -31,43 +35,70 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
 
   private final FileStorageService fileStorageService;
   private final ImportHistoryRepository historyRepository;
+  private final SemesterRepository semesterRepository;
   private final ExcelAdapterFactory adapterFactory;
   private final TimetableService timetableService;
   private final ObjectMapper objectMapper;
 
   @Override
   public ImportResultResponse importMasterTimetable(Long semesterId, MultipartFile file, Long uploadedBy) {
-    // 1. Kiểm tra tiến trình import trùng lặp trong cùng học kỳ
+    // 1. Kiểm tra học kỳ tồn tại (Fail fast)
+    Semester semester = semesterRepository.findById(semesterId)
+        .orElseThrow(() -> BusinessException.notExisted(TimetableErrorConstants.SEMESTER_NOT_FOUND));
+
+    // 2. Kiểm tra tiến trình import trùng lặp trong cùng học kỳ
     checkConcurrentImport(semesterId);
 
-    // 2. Lưu file vật lý đối soát
+    // 3. Lưu file vật lý đối soát
     String filePath = fileStorageService.storeFile(file, TimetableConstants.MODULE_NAME);
 
-    // 3. Khởi tạo bản ghi lịch sử
+    // 4. Khởi tạo bản ghi lịch sử
     ImportHistory history = initHistory(semesterId, uploadedBy, file.getOriginalFilename(), filePath);
 
     List<ImportRowError> errors = new ArrayList<>();
     try {
-      // 4. Mở file và dùng Adapter đọc dữ liệu
+      // 5. Mở file và dùng Adapter đọc dữ liệu
       ExcelImportAdapter<MasterTimetableRowDto> adapter = adapterFactory.getAdapter(ImportType.MASTER_TIMETABLE);
       List<MasterTimetableRowDto> validRows = parseExcel(file, adapter, errors);
 
-      // 5. Bàn giao danh sách sạch cho TimetableService lưu CSDL
-      int successCount = timetableService.processMasterTimetable(semesterId, validRows, errors);
+      // 6. Bàn giao danh sách sạch cho TimetableService lưu CSDL
+      TimetableProcessResult result = timetableService.processMasterTimetable(semesterId, validRows, errors);
 
-      // 6. Cập nhật kết quả cuối cùng
-      int failedCount = (validRows.size() + errors.size()) - successCount;
-      updateHistorySuccess(history, validRows.size(), successCount, failedCount, errors);
+      // 7. Cập nhật kết quả cuối cùng
+      int totalExcelDataRows = validRows.size() + errors.size();
+      int failedCount = totalExcelDataRows - result.getSuccessCount();
+      updateHistorySuccess(history, totalExcelDataRows, result.getSuccessCount(), failedCount, errors);
+
+      ImportResultResponse.ImportStatistics statistics = ImportResultResponse.ImportStatistics.builder()
+          .headerRow(adapter.getHeaderRowIndex() + 1)
+          .dataStartRow(adapter.getDataStartRow() + 1)
+          .totalWeeksDetected(adapter.getDetectedWeeksCount())
+          .mappedColumnsCount(adapter.getMappedColumnsCount())
+          .subjectsProcessed(result.getSubjectsProcessed())
+          .classSectionsProcessed(result.getClassSectionsProcessed())
+          .classSchedulesSaved(result.getClassSchedulesSaved())
+          .onlineRoomsAllocated(result.getOnlineRoomsAllocated())
+          .meetingSessionsGenerated(result.getMeetingSessionsGenerated())
+          .build();
 
       return ImportResultResponse.builder()
-          .totalRows(validRows.size())
-          .successRows(successCount)
+          .importId(history.getId())
+          .fileName(file.getOriginalFilename())
+          .fileSize(formatFileSize(file.getSize()))
+          .semesterId(semester.getId())
+          .semesterCode(semester.getCode())
+          .semesterName(semester.getName())
+          .status(failedCount == 0 ? ImportStatus.SUCCESS : ImportStatus.PARTIAL_SUCCESS)
+          .totalRows(totalExcelDataRows)
+          .successRows(result.getSuccessCount())
           .failureRows(failedCount)
+          .statistics(statistics)
           .errors(errors)
+          .completedAt(LocalDateTime.now())
           .build();
 
     } catch (Exception e) {
-      log.error("(importMasterTimetable) Lỗi hệ thống: ", e);
+      log.error("(importMasterTimetable) System error during timetable import: ", e);
       updateHistoryFailed(history, e.getMessage());
       throw e;
     }
@@ -76,14 +107,14 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   private void checkConcurrentImport(Long semesterId) {
     historyRepository.findFirstBySemesterIdAndStatusOrderByCreatedAtDesc(semesterId, ImportStatus.PROCESSING)
         .ifPresent(h -> {
-          // Nếu tiến trình import cũ đã chạy quá 3 phút (thường do server crash hoặc restart giữa chừng)
+          // If previous import job has been running for more than 3 minutes (usually due to crash/restart mid-process)
           if (h.getCreatedAt() != null && h.getCreatedAt().isBefore(java.time.LocalDateTime.now().minusMinutes(3))) {
-            log.warn("(checkConcurrentImport) Phát hiện tiến trình cũ id={} bị gián đoạn/treo quá 3 phút, tự động chuyển FAILED", h.getId());
+            log.warn("(checkConcurrentImport) Found stale import job id={} running for more than 3 minutes, automatically marking as FAILED", h.getId());
             h.setStatus(ImportStatus.FAILED);
             try {
-              h.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("reason", "Tiến trình import bị gián đoạn do khởi động lại hệ thống hoặc timeout")));
+              h.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("reason", "Import process timed out or interrupted due to server restart")));
             } catch (Exception ignored) {
-              h.setErrorLog("{\"reason\": \"Tiến trình import bị gián đoạn\"}");
+              h.setErrorLog("{\"reason\": \"Import process interrupted\"}");
             }
             historyRepository.save(h);
             return;
@@ -129,10 +160,10 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
         }
       }
     } catch (BusinessException be) {
-      log.error("(parseExcel) Lỗi nghiệp vụ cấu trúc Excel: ", be);
+      log.error("(parseExcel) Excel structure business error: ", be);
       throw be;
     } catch (Exception e) {
-      log.error("(parseExcel) Lỗi đọc hoặc phân tích file Excel: ", e);
+      log.error("(parseExcel) Error reading or parsing Excel file: ", e);
       throw BusinessException.invalidInputFile(TimetableErrorConstants.FILE_INVALID_FORMAT);
     }
     return validRows;
@@ -146,7 +177,7 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
     try {
       history.setErrorLog(errors.isEmpty() ? null : objectMapper.writeValueAsString(errors));
     } catch (Exception e) {
-      log.warn("(updateHistorySuccess) Lỗi serialize error_log", e);
+      log.warn("(updateHistorySuccess) Error serializing error_log to JSON", e);
       history.setErrorLog(null);
     }
     historyRepository.save(history);
@@ -157,9 +188,16 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
     try {
       history.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("error", error != null ? error : "Unknown error")));
     } catch (Exception e) {
-      log.warn("(updateHistoryFailed) Lỗi serialize error_log", e);
-      history.setErrorLog("{\"error\": \"Lỗi hệ thống không xác định\"}");
+      log.warn("(updateHistoryFailed) Error serializing error_log to JSON", e);
+      history.setErrorLog("{\"error\": \"Unknown system error\"}");
     }
     historyRepository.save(history);
+  }
+
+  private String formatFileSize(long bytes) {
+    if (bytes < 1024) return bytes + " B";
+    int exp = (int) (Math.log(bytes) / Math.log(1024));
+    char pre = "KMGTPE".charAt(exp - 1);
+    return String.format("%.2f %sB", bytes / Math.pow(1024, exp), pre);
   }
 }

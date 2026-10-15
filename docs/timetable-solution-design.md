@@ -412,19 +412,38 @@ Authorization: Bearer <access_token>
   "code": "0",
   "message": "Import thời khóa biểu tổng thành công.",
   "data": {
-    "totalRows": 240,
-    "successRows": 238,
+    "importId": 5,
+    "fileName": "1606_TKB-hoc-ky-1-nam-hoc-2026-2027.xlsx",
+    "fileSize": "871.92 KB",
+    "semesterId": 1,
+    "semesterCode": "2026-2027-HK1",
+    "semesterName": "Học kỳ 1 năm học 2026 - 2027",
+    "status": "PARTIAL_SUCCESS",
+    "totalRows": 4471,
+    "successRows": 4469,
     "failureRows": 2,
+    "statistics": {
+      "headerRow": 7,
+      "dataStartRow": 12,
+      "totalWeeksDetected": 17,
+      "mappedColumnsCount": 13,
+      "subjectsProcessed": 336,
+      "classSectionsProcessed": 2334,
+      "classSchedulesSaved": 4469,
+      "onlineRoomsAllocated": 4,
+      "meetingSessionsGenerated": 8
+    },
     "errors": [
       {
-        "rowIndex": 45,
-        "reason": "Không có tuần học nào được đánh dấu 'x'"
+        "rowNumber": 1557,
+        "errorMessage": "Không có tuần học nào được đánh dấu 'x'"
       },
       {
-        "rowIndex": 89,
-        "reason": "Mã môn học không được để trống"
+        "rowNumber": 4233,
+        "errorMessage": "Không có tuần học nào được đánh dấu 'x'"
       }
-    ]
+    ],
+    "completedAt": "2026-10-16T01:45:00"
   }
 }
 ```
