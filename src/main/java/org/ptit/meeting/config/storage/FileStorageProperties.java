@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class FileStorageProperties {
 
   private String type = "LOCAL";
-  private LocalConfig localConfig = new LocalConfig();
+  private LocalConfig local = new LocalConfig();
   private Map<String, ModuleUploadRule> modules;
 
   public ModuleUploadRule getRule(String moduleName) {
@@ -24,20 +24,43 @@ public class FileStorageProperties {
     return modules.get(moduleName);
   }
 
+  public LocalConfig getLocalConfig() {
+    return local;
+  }
+
+  public void setLocalConfig(LocalConfig localConfig) {
+    this.local = localConfig;
+  }
+
   @Getter
   @Setter
   public static class LocalConfig {
 
-    private String baseUrl = "uploads";
+    private String baseDir = "uploads";
+
+    public String getBaseUrl() {
+      return baseDir;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+      this.baseDir = baseUrl;
+    }
   }
 
   @Getter
   @Setter
   public static class ModuleUploadRule {
 
-    private String subUrl;
+    private String subDir;
     private long maxSizeBytes;
     private List<String> allowedExtensions;
 
+    public String getSubUrl() {
+      return subDir;
+    }
+
+    public void setSubUrl(String subUrl) {
+      this.subDir = subUrl;
+    }
   }
 }

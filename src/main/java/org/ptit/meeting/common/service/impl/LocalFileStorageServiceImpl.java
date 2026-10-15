@@ -28,7 +28,11 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
     validateFile(file, moduleName);
 
     FileStorageProperties.ModuleUploadRule rule = properties.getRule(moduleName);
-    Path uploadPath = Paths.get(properties.getLocalConfig().getBaseUrl(), rule.getSubUrl());
+    String baseDir = properties.getLocal() != null && properties.getLocal().getBaseDir() != null
+        ? properties.getLocal().getBaseDir() : "uploads";
+    String subDir = rule.getSubDir() != null ? rule.getSubDir() : "";
+
+    Path uploadPath = subDir.isEmpty() ? Paths.get(baseDir) : Paths.get(baseDir, subDir);
 
     try {
       Files.createDirectories(uploadPath);
@@ -38,7 +42,7 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
       Path targetLocation = uploadPath.resolve(uniqueFilename);
 
       Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-      return rule.getSubUrl() + "/" + uniqueFilename;
+      return subDir.isEmpty() ? uniqueFilename : (subDir + "/" + uniqueFilename);
     } catch (IOException ex) {
       log.error("(storeFile) Lỗi lưu file: ", ex);
       throw BusinessException.invalidInputFile("system.internal_error");
@@ -62,7 +66,9 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
   @Override
   public Resource loadFileAsResource(String relativePath) {
     try {
-      Path filePath = Paths.get(properties.getLocalConfig().getBaseUrl()).resolve(relativePath)
+      String baseDir = properties.getLocal() != null && properties.getLocal().getBaseDir() != null
+          ? properties.getLocal().getBaseDir() : "uploads";
+      Path filePath = Paths.get(baseDir).resolve(relativePath)
           .normalize();
       Resource resource = new UrlResource(filePath.toUri());
       if (resource.exists()) {
@@ -77,7 +83,9 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
   @Override
   public void deleteFile(String relativePath) {
     try {
-      Path filePath = Paths.get(properties.getLocalConfig().getBaseUrl()).resolve(relativePath)
+      String baseDir = properties.getLocal() != null && properties.getLocal().getBaseDir() != null
+          ? properties.getLocal().getBaseDir() : "uploads";
+      Path filePath = Paths.get(baseDir).resolve(relativePath)
           .normalize();
       Files.deleteIfExists(filePath);
     } catch (IOException e) {

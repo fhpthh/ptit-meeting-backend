@@ -10,6 +10,7 @@ import java.util.TreeSet;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.ptit.meeting.exception.BusinessException;
@@ -55,20 +56,22 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       boolean hasSubject = false, hasDay = false, hasPeriod = false;
       for (Cell cell : row) {
         String text = normalize(getCellValueAsString(cell));
-        if (text.contains("mamon")) {
+        if (text.contains("mamon") || text.contains("monhoc") || text.contains("hocphan")) {
           hasSubject = true;
         }
         if (text.equals("thu")) {
           hasDay = true;
         }
-        if (text.contains("tietbd")) {
+        if (text.contains("tietbd") || text.contains("tiet")) {
           hasPeriod = true;
         }
       }
       if (hasSubject && hasDay && hasPeriod) {
+        log.info("(scanHeaderRow) Đã phát hiện dòng tiêu đề TKB tại dòng {} (index={})", r + 1, r);
         return r;
       }
     }
+    log.error("(scanHeaderRow) Không tìm thấy dòng tiêu đề hợp lệ trong 25 dòng đầu tiên của file Excel!");
     throw BusinessException.invalidInputFile(TimetableErrorConstants.EXCEL_HEADER_INVALID);
   }
 
@@ -76,47 +79,64 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     for (int c = 0; c < headerRow.getLastCellNum(); c++) {
       String text = normalize(getCellValueAsString(headerRow.getCell(c)));
       if (text.contains("mamon")) {
-        colIndexMap.put(TimetableConstants.HEADER_SUBJECT_CODE, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_CODE, c);
       } else if (text.contains("tenmon")) {
-        colIndexMap.put(TimetableConstants.HEADER_SUBJECT_NAME, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_NAME, c);
       } else if (text.equals("khoa")) {
-        colIndexMap.put(TimetableConstants.HEADER_COHORT, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_COHORT, c);
       } else if (text.equals("nhom")) {
-        colIndexMap.put(TimetableConstants.HEADER_GROUP, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_GROUP, c);
       } else if (text.contains("toth")) {
-        colIndexMap.put(TimetableConstants.HEADER_PRACTICE, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_PRACTICE, c);
       } else if (text.equals("thu")) {
-        colIndexMap.put(TimetableConstants.HEADER_DAY, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_DAY, c);
       } else if (text.contains("tietbd")) {
-        colIndexMap.put(TimetableConstants.HEADER_START_PERIOD, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_START_PERIOD, c);
       } else if (text.contains("sotiet")) {
-        colIndexMap.put(TimetableConstants.HEADER_NUM_PERIODS, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_NUM_PERIODS, c);
       } else if (text.contains("giangvien")) {
-        colIndexMap.put(TimetableConstants.HEADER_LECTURER, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_LECTURER, c);
       } else if (text.equals("phong")) {
-        colIndexMap.put(TimetableConstants.HEADER_ROOM, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_ROOM, c);
       } else if (text.equals("nha")) {
-        colIndexMap.put(TimetableConstants.HEADER_BUILDING, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_BUILDING, c);
       } else if (text.contains("malop")) {
-        colIndexMap.put(TimetableConstants.HEADER_MANAGEMENT_CLASS, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_MANAGEMENT_CLASS, c);
       } else if (text.contains("sotc")) {
-        colIndexMap.put(TimetableConstants.HEADER_CREDIT, c);
+        colIndexMap.putIfAbsent(TimetableConstants.HEADER_CREDIT, c);
       }
     }
+    log.info("(mapCoreColumns) Đã ánh xạ các cột: {}", colIndexMap);
   }
 
   private void mapWeekColumnsByNumber(Sheet sheet, int headerRowIndex) {
-    // Quét các dòng quanh header (như dòng 5 hoặc 10) để nhặt các cột có số tuần từ 1 đến 25
-    int startScan = Math.max(0, headerRowIndex - 3);
-    for (int r = startScan; r <= headerRowIndex + 3; r++) {
+    int startScan = Math.max(0, headerRowIndex - 4);
+    int endScan = Math.min(sheet.getLastRowNum(), headerRowIndex + 4);
+
+    for (int r = startScan; r <= endScan; r++) {
       Row row = sheet.getRow(r);
-      if (row == null) {
-        continue;
-      }
-      for (int c = 0; c < row.getLastCellNum(); c++) {
-        Integer val = getCellValueAsInteger(row.getCell(c));
-        if (val != null && val >= 1 && val <= 25) {
-          weekToColMap.putIfAbsent(val, c);
+      if (row == null) continue;
+
+      for (int c = 0; c < row.getLastCellNum() - 2; c++) {
+        Integer val1 = getCellValueAsInteger(row.getCell(c));
+        Integer val2 = getCellValueAsInteger(row.getCell(c + 1));
+        Integer val3 = getCellValueAsInteger(row.getCell(c + 2));
+
+        if (val1 != null && val1 == 1 && val2 != null && val2 == 2 && val3 != null && val3 == 3) {
+          int week = 1;
+          int col = c;
+          while (col < row.getLastCellNum()) {
+            Integer weekVal = getCellValueAsInteger(row.getCell(col));
+            if (weekVal != null && weekVal == week) {
+              weekToColMap.put(week, col);
+              week++;
+              col++;
+            } else {
+              break;
+            }
+          }
+          log.info("(mapWeekColumnsByNumber) Tìm thấy {} tuần học tại dòng {} (index={})", weekToColMap.size(), r + 1, r);
+          return;
         }
       }
     }
@@ -135,6 +155,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       }
       this.dataStartRow++;
     }
+    log.info("(determineDataStartRow) Dòng bắt đầu dữ liệu TKB: dòng {} (index={})", this.dataStartRow + 1, this.dataStartRow);
   }
 
   @Override
@@ -239,11 +260,14 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     return sb.toString();
   }
 
+  private static final DataFormatter DATA_FORMATTER = new DataFormatter();
+
   private String normalize(String text) {
     if (text == null) {
       return "";
     }
-    return Normalizer.normalize(text, Normalizer.Form.NFD)
+    String s = text.replace("đ", "d").replace("Đ", "d");
+    return Normalizer.normalize(s, Normalizer.Form.NFD)
         .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
         .toLowerCase()
         .replaceAll("[^a-z0-9]", "");
@@ -253,9 +277,8 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     if (cell == null) {
       return null;
     }
-    cell.setCellType(CellType.STRING);
-    String val = cell.getStringCellValue();
-    return val != null ? val.trim() : null;
+    String val = DATA_FORMATTER.formatCellValue(cell);
+    return (val != null && !val.isBlank()) ? val.trim() : null;
   }
 
   private Integer getCellValueAsInteger(Cell cell) {
@@ -265,9 +288,10 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     if (cell.getCellType() == CellType.NUMERIC) {
       return (int) cell.getNumericCellValue();
     }
-    if (cell.getCellType() == CellType.STRING) {
+    String str = DATA_FORMATTER.formatCellValue(cell);
+    if (str != null && !str.isBlank()) {
       try {
-        return Integer.parseInt(cell.getStringCellValue().trim());
+        return Integer.parseInt(str.trim());
       } catch (NumberFormatException ignored) {
       }
     }

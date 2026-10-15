@@ -40,6 +40,12 @@ public class ClassSection {
   @Column(name = "lecturer_id")
   private Long lecturerId;
 
+  @Column(name = "lecturer_name", length = 150)
+  private String lecturerName;
+
+  @Column(name = "cohort", length = 20)
+  private String cohort;
+
   @Column(name = "class_code", nullable = false, length = 50)
   private String classCode;
 
@@ -49,7 +55,7 @@ public class ClassSection {
   @Column(name = "practice_group", length = 20)
   private String practiceGroup;
 
-  @Column(name = "management_class", length = 50)
+  @Column(name = "management_class", length = 255)
   private String managementClass;
 
   @Enumerated(EnumType.STRING)
