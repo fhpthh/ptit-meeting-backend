@@ -1,7 +1,7 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
--- 1. BẢNG HỌC KỲ (SEMESTERS)
+-- 1. HỌC KỲ
 CREATE TABLE IF NOT EXISTS semesters (
                                          id            BIGINT AUTO_INCREMENT PRIMARY KEY,
                                          code          VARCHAR(50)  NOT NULL UNIQUE,
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS semesters (
     INDEX idx_semesters_active (is_active)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. BẢNG MÔN HỌC (SUBJECTS)
+-- 2. MÔN HỌC
 CREATE TABLE IF NOT EXISTS subjects (
                                         id          BIGINT AUTO_INCREMENT PRIMARY KEY,
                                         code        VARCHAR(30)  NOT NULL UNIQUE,
@@ -27,16 +27,18 @@ CREATE TABLE IF NOT EXISTS subjects (
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. BẢNG LỚP HỌC PHẦN (CLASS_SECTIONS)
+-- 3. LỚP HỌC PHẦN (Đã thêm lecturer_name và cohort)
 CREATE TABLE IF NOT EXISTS class_sections (
                                               id               BIGINT AUTO_INCREMENT PRIMARY KEY,
                                               semester_id      BIGINT       NOT NULL,
                                               subject_id       BIGINT       NOT NULL,
                                               lecturer_id      BIGINT       NULL,
-                                              class_code       VARCHAR(50)  NOT NULL,
+                                              lecturer_name    VARCHAR(150) NULL,         -- Tên text gốc của Giảng viên từ Excel
+    cohort           VARCHAR(20)  NULL,         -- Khóa học: 2024, 2025
+    class_code       VARCHAR(50)  NOT NULL,     -- VD: AI1306_01
     group_number     VARCHAR(20)  NULL,
     practice_group   VARCHAR(20)  NULL,
-    management_class VARCHAR(50)  NULL,
+    management_class VARCHAR(255) NULL,         -- Danh sách lớp QLSV cách nhau dấu phẩy
     status           VARCHAR(30)  NOT NULL DEFAULT 'ACTIVE',
     created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -48,7 +50,7 @@ CREATE TABLE IF NOT EXISTS class_sections (
     CONSTRAINT fk_cs_lecturer FOREIGN KEY (lecturer_id) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. BẢNG LỊCH HỌC ĐỊNH KỲ (CLASS_SCHEDULES)
+-- 4. LỊCH HỌC ĐỊNH KỲ
 CREATE TABLE IF NOT EXISTS class_schedules (
                                                id               BIGINT AUTO_INCREMENT PRIMARY KEY,
                                                class_section_id BIGINT       NOT NULL,
@@ -68,7 +70,7 @@ CREATE TABLE IF NOT EXISTS class_schedules (
     CONSTRAINT fk_sched_class FOREIGN KEY (class_section_id) REFERENCES class_sections(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. BẢNG PHÒNG TRỰC TUYẾN CỐ ĐỊNH (ROOMS)
+-- 5. PHÒNG TRỰC TUYẾN CỐ ĐỊNH
 CREATE TABLE IF NOT EXISTS rooms (
                                      id                 BIGINT AUTO_INCREMENT PRIMARY KEY,
                                      class_section_id   BIGINT       NULL UNIQUE,
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     CONSTRAINT fk_room_user  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. BẢNG BUỔI HỌC CỤ THỂ (MEETING_SESSIONS)
+-- 6. BUỔI HỌC CỤ THỂ
 CREATE TABLE IF NOT EXISTS meeting_sessions (
                                                 id               BIGINT AUTO_INCREMENT PRIMARY KEY,
                                                 room_id          BIGINT      NOT NULL,
@@ -103,7 +105,7 @@ CREATE TABLE IF NOT EXISTS meeting_sessions (
     CONSTRAINT fk_sess_sched FOREIGN KEY (schedule_id) REFERENCES class_schedules(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. BẢNG GHI DANH SINH VIÊN (CLASS_ENROLLMENTS)
+-- 7. GHI DANH SINH VIÊN
 CREATE TABLE IF NOT EXISTS class_enrollments (
                                                  id               BIGINT AUTO_INCREMENT PRIMARY KEY,
                                                  class_section_id BIGINT      NOT NULL,
@@ -117,7 +119,7 @@ CREATE TABLE IF NOT EXISTS class_enrollments (
     CONSTRAINT fk_enr_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. BẢNG LỊCH SỬ IMPORT (IMPORT_HISTORIES)
+-- 8. LỊCH SỬ IMPORT
 CREATE TABLE IF NOT EXISTS import_histories (
                                                 id           BIGINT AUTO_INCREMENT PRIMARY KEY,
                                                 semester_id  BIGINT       NOT NULL,

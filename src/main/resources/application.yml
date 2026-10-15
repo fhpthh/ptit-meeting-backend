@@ -52,3 +52,20 @@ application:
       secret-key: ${JWT_SECRET_KEY}
       access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:1800000}
       refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  storage:
+    type: LOCAL
+    local:
+      base-dir: ${UPLOAD_BASE_DIR:uploads}
+    modules:
+      timetable:
+        sub-dir: timetables
+        max-size-bytes: 26214400 # 25MB
+        allowed-extensions: [ .xlsx, .xls ]
+      avatar:
+        sub-dir: avatars
+        max-size-bytes: 5242880  # 5MB
+        allowed-extensions: [ .png, .jpg, .jpeg ]
+      document:
+        sub-dir: documents
+        max-size-bytes: 52428800 # 50MB
+        allowed-extensions: [ .pdf, .docx, .pptx ]
