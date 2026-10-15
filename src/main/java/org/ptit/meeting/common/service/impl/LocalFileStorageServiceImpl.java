@@ -44,7 +44,7 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
       Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
       return subDir.isEmpty() ? uniqueFilename : (subDir + "/" + uniqueFilename);
     } catch (IOException ex) {
-      log.error("(storeFile) Lỗi lưu file: ", ex);
+      log.error("(storeFile) Error storing file: ", ex);
       throw BusinessException.invalidInputFile("system.internal_error");
     }
   }
@@ -89,7 +89,7 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
           .normalize();
       Files.deleteIfExists(filePath);
     } catch (IOException e) {
-      log.warn("(deleteFile) Không thể xóa file: {}", relativePath);
+      log.warn("(deleteFile) Could not delete file: {}", relativePath);
     }
   }
 

@@ -2,8 +2,11 @@ package org.ptit.meeting.modules.timetable.service.impl;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
@@ -14,6 +17,7 @@ import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.SessionStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
+import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
 import org.ptit.meeting.modules.timetable.entity.ClassSchedule;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
@@ -48,33 +52,60 @@ public class TimetableServiceImpl implements TimetableService {
 
   @Override
   @Transactional
-  public int processMasterTimetable(Long semesterId, List<MasterTimetableRowDto> rows,
+  public TimetableProcessResult processMasterTimetable(Long semesterId, List<MasterTimetableRowDto> rows,
       List<ImportRowError> errors) {
     Semester semester = semesterRepository.findById(semesterId)
         .orElseThrow(
             () -> BusinessException.notExisted(TimetableErrorConstants.SEMESTER_NOT_FOUND));
 
     int successCount = 0;
+    Set<String> processedSubjects = new HashSet<>();
+    Set<String> processedClassSections = new HashSet<>();
+    int schedulesSaved = 0;
+    AtomicInteger onlineRoomsAllocated = new AtomicInteger(0);
+    AtomicInteger meetingSessionsGenerated = new AtomicInteger(0);
+
     for (MasterTimetableRowDto row : rows) {
       try {
-        processSingleRow(semester, row);
+        processSingleRow(semester, row, processedSubjects, processedClassSections, onlineRoomsAllocated, meetingSessionsGenerated);
         successCount++;
+        schedulesSaved++;
       } catch (Exception e) {
-        log.warn("(processMasterTimetable) Dòng {} lỗi: {}", row.getRowNumber(), e.getMessage());
+        log.warn("(processMasterTimetable) Error processing row {}: {}", row.getRowNumber(), e.getMessage());
         errors.add(new ImportRowError(row.getRowNumber(), e.getMessage()));
       }
     }
-    return successCount;
+
+    return TimetableProcessResult.builder()
+        .successCount(successCount)
+        .subjectsProcessed(processedSubjects.size())
+        .classSectionsProcessed(processedClassSections.size())
+        .classSchedulesSaved(schedulesSaved)
+        .onlineRoomsAllocated(onlineRoomsAllocated.get())
+        .meetingSessionsGenerated(meetingSessionsGenerated.get())
+        .build();
   }
 
-  private void processSingleRow(Semester semester, MasterTimetableRowDto dto) {
+  private void processSingleRow(
+      Semester semester,
+      MasterTimetableRowDto dto,
+      Set<String> processedSubjects,
+      Set<String> processedClassSections,
+      AtomicInteger onlineRoomsAllocated,
+      AtomicInteger meetingSessionsGenerated
+  ) {
     Subject subject = upsertSubject(dto);
+    processedSubjects.add(subject.getCode());
+
     ClassSection section = upsertClassSection(semester.getId(), subject.getId(), dto);
+    processedClassSections.add(section.getClassCode());
+
     ClassSchedule schedule = saveClassSchedule(section.getId(), dto);
 
     if (dto.isOnline()) {
-      Room room = allocateOnlineRoom(section);
-      generateOnlineSessions(semester.getStartDate(), schedule, room, dto);
+      Room room = allocateOnlineRoom(section, onlineRoomsAllocated);
+      int sessionsCount = generateOnlineSessions(semester.getStartDate(), schedule, room, dto);
+      meetingSessionsGenerated.addAndGet(sessionsCount);
     }
   }
 
@@ -115,7 +146,7 @@ public class TimetableServiceImpl implements TimetableService {
     }
     return userRepository.findByEmailOrCode(lecturerName, lecturerName)
         .map(User::getId)
-        .orElse(null); // Giữ null nếu chưa map được tài khoản, tên text đã lưu ở class_sections
+        .orElse(null);
   }
 
   private ClassSchedule saveClassSchedule(Long classSectionId, MasterTimetableRowDto dto) {
@@ -135,20 +166,24 @@ public class TimetableServiceImpl implements TimetableService {
     );
   }
 
-  private Room allocateOnlineRoom(ClassSection section) {
+  private Room allocateOnlineRoom(ClassSection section, AtomicInteger onlineRoomsAllocated) {
     return roomRepository.findByClassSectionId(section.getId())
-        .orElseGet(() -> roomRepository.save(
-            Room.builder()
-                .classSectionId(section.getId())
-                .name("Phòng trực tuyến - " + section.getClassCode())
-                .passcode(generatePin())
-                .status(RoomStatus.ACTIVE)
-                .build()
-        ));
+        .orElseGet(() -> {
+          onlineRoomsAllocated.incrementAndGet();
+          return roomRepository.save(
+              Room.builder()
+                  .classSectionId(section.getId())
+                  .name("Phòng trực tuyến - " + section.getClassCode())
+                  .passcode(generatePin())
+                  .status(RoomStatus.ACTIVE)
+                  .build()
+          );
+        });
   }
 
-  private void generateOnlineSessions(LocalDate semesterStart, ClassSchedule sched, Room room,
+  private int generateOnlineSessions(LocalDate semesterStart, ClassSchedule sched, Room room,
       MasterTimetableRowDto dto) {
+    int count = 0;
     for (Integer weekNum : dto.getActiveWeeks()) {
       LocalDate studyDate = dateCalculator.calculateStudyDate(semesterStart, weekNum,
           sched.getDayOfWeek());
@@ -164,8 +199,10 @@ public class TimetableServiceImpl implements TimetableService {
                 .status(SessionStatus.SCHEDULED)
                 .build()
         );
+        count++;
       }
     }
+    return count;
   }
 
   private String generatePin() {

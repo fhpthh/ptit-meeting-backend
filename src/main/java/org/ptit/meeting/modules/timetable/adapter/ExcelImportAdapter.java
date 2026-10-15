@@ -14,6 +14,18 @@ public interface ExcelImportAdapter<T> {
 
   int getDataStartRow();
 
+  default int getHeaderRowIndex() {
+    return 0;
+  }
+
+  default int getDetectedWeeksCount() {
+    return 0;
+  }
+
+  default int getMappedColumnsCount() {
+    return 0;
+  }
+
   T adapt(Row row, int rowNumber, List<ImportRowError> errors);
 
   boolean validate(T data, int rowNumber, List<ImportRowError> errors);
