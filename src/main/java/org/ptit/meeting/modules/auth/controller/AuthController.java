@@ -48,7 +48,7 @@ public class AuthController {
       @Valid @RequestBody LoginRequest request,
       HttpServletRequest httpRequest
   ) {
-    log.info("(login) request: {}", request);
+    log.info("(login) request: {}", request.username());
     ClientMetadata metadata = extractClientMetadata(httpRequest);
     AuthResponse response = authFacade.login(request, metadata.ip(), metadata.userAgent());
 
