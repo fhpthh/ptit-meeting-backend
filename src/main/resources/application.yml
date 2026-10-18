@@ -8,7 +8,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/ptit_meeting?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:24102004dz}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -47,6 +47,14 @@ azure:
     graph-user-info-url: https://graph.microsoft.com/v1.0/me
 
 application:
+  livekit:
+    enabled: ${LIVEKIT_ENABLED:false}
+    api-url: ${LIVEKIT_API_URL:}
+    websocket-url: ${LIVEKIT_WS_URL:}
+    api-key: ${LIVEKIT_API_KEY:}
+    api-secret: ${LIVEKIT_API_SECRET:}
+    join-token-ttl-ms: ${LIVEKIT_JOIN_TOKEN_TTL_MS:600000}
+
   security:
     jwt:
       secret-key: ${JWT_SECRET_KEY}
