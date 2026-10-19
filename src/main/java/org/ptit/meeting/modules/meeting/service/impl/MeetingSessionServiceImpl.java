@@ -10,11 +10,13 @@ import org.ptit.meeting.modules.meeting.dto.request.MeetingSessionScheduleSyncRe
 import org.ptit.meeting.modules.meeting.dto.response.MeetingSessionResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoom;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
+import org.ptit.meeting.modules.meeting.event.MeetingSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.mapper.MeetingSessionMapper;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingSessionService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,7 @@ public class MeetingSessionServiceImpl implements MeetingSessionService {
   private final MeetingRoomRepository roomRepository;
   private final MeetingAuthorizationService authorizationService;
   private final MeetingSessionMapper sessionMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Override
   @Transactional
@@ -138,7 +141,12 @@ public class MeetingSessionServiceImpl implements MeetingSessionService {
 
     session.setStatus(MeetingSessionStatus.ENDED);
     session.setActualEndAt(Instant.now());
-    return sessionMapper.toResponse(saveTransition(session));
+    MeetingSession endedSession = saveTransition(session);
+    eventPublisher.publishEvent(new MeetingSessionEndedEvent(
+        endedSession.getId(),
+        endedSession.getProviderRoomName()
+    ));
+    return sessionMapper.toResponse(endedSession);
   }
 
   @Override

@@ -19,8 +19,8 @@ public class MeetingAuthorizationServiceImpl implements MeetingAuthorizationServ
     private final MeetingRoomMemberRepository memberRepository;
 
     @Override
-    public void requireActiveMember(String roomId, Long userId) {
-        findActiveMember(roomId, userId);
+    public MeetingRoomMember requireActiveMember(String roomId, Long userId) {
+        return findActiveMember(roomId, userId);
     }
 
     @Override

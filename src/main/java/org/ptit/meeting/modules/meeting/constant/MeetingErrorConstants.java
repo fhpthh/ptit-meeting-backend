@@ -24,6 +24,10 @@ public final class MeetingErrorConstants {
   public static final String SESSION_SCHEDULE_INVALID = "error.meeting.session.schedule-invalid";
   public static final String SESSION_SCHEDULE_CONFLICT = "error.meeting.session.schedule-conflict";
   public static final String SESSION_CONCURRENT_UPDATE = "error.meeting.session.concurrent-update";
+  public static final String SESSION_NOT_ACTIVE = "error.meeting.session.not-active";
+  public static final String JOIN_TOO_EARLY = "error.meeting.join.too-early";
+  public static final String JOIN_FAILED = "error.meeting.join.failed";
+  public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";
   public static final String ACCESS_DENIED = "error.meeting.access-denied";
 
   private MeetingErrorConstants() {

@@ -2,7 +2,9 @@ package org.ptit.meeting.modules.meeting.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.common.wrapper.BaseResponse;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingSessionResponse;
+import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingSessionService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 public class MeetingSessionController {
 
   private final MeetingSessionService sessionService;
+  private final MeetingJoinService joinService;
 
   @GetMapping("/{sessionId}")
   public BaseResponse<MeetingSessionResponse> getById(
@@ -28,6 +31,14 @@ public class MeetingSessionController {
       @AuthenticationPrincipal(expression = "userId") Long currentUserId
   ) {
     return BaseResponse.success(sessionService.start(sessionId, currentUserId));
+  }
+
+  @PostMapping("/{sessionId}/join")
+  public BaseResponse<MeetingJoinResponse> join(
+      @PathVariable String sessionId,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    return BaseResponse.success(joinService.join(sessionId, currentUserId));
   }
 
   @PostMapping("/{sessionId}/end")
