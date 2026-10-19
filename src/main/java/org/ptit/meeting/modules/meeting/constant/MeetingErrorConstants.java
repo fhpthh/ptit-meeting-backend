@@ -17,14 +17,22 @@ public final class MeetingErrorConstants {
   public static final String MEMBER_ROLE_INVALID = "error.meeting.member.role-invalid";
   public static final String OWNER_IMMUTABLE = "error.meeting.member.owner-immutable";
   public static final String VIEWER_EVENT_ONLY = "error.meeting.member.viewer-event-only";
-  public static final String SESSION_NOT_FOUND = "error.meeting.session.not-found";
-  public static final String SESSION_TITLE_INVALID = "error.meeting.session.title-invalid";
-  public static final String SESSION_TIME_INVALID = "error.meeting.session.time-invalid";
-  public static final String SESSION_STATE_INVALID = "error.meeting.session.state-invalid";
-  public static final String SESSION_SCHEDULE_INVALID = "error.meeting.session.schedule-invalid";
-  public static final String SESSION_SCHEDULE_CONFLICT = "error.meeting.session.schedule-conflict";
-  public static final String SESSION_CONCURRENT_UPDATE = "error.meeting.session.concurrent-update";
-  public static final String SESSION_NOT_ACTIVE = "error.meeting.session.not-active";
+  public static final String RUNTIME_SESSION_NOT_FOUND =
+      "error.meeting.runtime-session.not-found";
+  public static final String RUNTIME_SESSION_TITLE_INVALID =
+      "error.meeting.runtime-session.title-invalid";
+  public static final String RUNTIME_SESSION_TIME_INVALID =
+      "error.meeting.runtime-session.time-invalid";
+  public static final String RUNTIME_SESSION_STATE_INVALID =
+      "error.meeting.runtime-session.state-invalid";
+  public static final String RUNTIME_SESSION_SCHEDULE_INVALID =
+      "error.meeting.runtime-session.schedule-invalid";
+  public static final String RUNTIME_SESSION_SCHEDULE_CONFLICT =
+      "error.meeting.runtime-session.schedule-conflict";
+  public static final String RUNTIME_SESSION_CONCURRENT_UPDATE =
+      "error.meeting.runtime-session.concurrent-update";
+  public static final String RUNTIME_SESSION_NOT_ACTIVE =
+      "error.meeting.runtime-session.not-active";
   public static final String JOIN_TOO_EARLY = "error.meeting.join.too-early";
   public static final String JOIN_FAILED = "error.meeting.join.failed";
   public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";

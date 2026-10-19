@@ -8,5 +8,5 @@ public interface MeetingAuthorizationService {
 
     void requireRoomOwner(String roomId, Long userId);
 
-    void requireSessionHost(String roomId, Long userId);
+    void requireRuntimeSessionHost(String roomId, Long userId);
 }

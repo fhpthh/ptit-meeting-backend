@@ -16,16 +16,16 @@ import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
-import org.ptit.meeting.modules.meeting.constant.enums.MeetingSessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoom;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoomMember;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoomSetting;
-import org.ptit.meeting.modules.meeting.entity.MeetingSession;
+import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomSettingRepository;
-import org.ptit.meeting.modules.meeting.repository.MeetingSessionRepository;
+import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.springframework.stereotype.Service;
@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MeetingJoinServiceImpl implements MeetingJoinService {
 
-  private final MeetingSessionRepository sessionRepository;
+  private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final MeetingRoomRepository roomRepository;
   private final MeetingRoomSettingRepository settingRepository;
   private final MeetingAuthorizationService authorizationService;
@@ -45,18 +45,18 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
 
   @Override
   @Transactional(readOnly = true)
-  public MeetingJoinResponse join(String sessionId, Long currentUserId) {
-    MeetingSession session = findSession(sessionId);
+  public MeetingJoinResponse join(String runtimeSessionId, Long currentUserId) {
+    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
     MeetingRoomMember member = authorizationService.requireActiveMember(
-        session.getMeetingRoomId(),
+        runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    requireActiveSession(session);
+    requireActiveRuntimeSession(runtimeSession);
 
-    MeetingRoom room = findRoom(session.getMeetingRoomId());
+    MeetingRoom room = findRoom(runtimeSession.getMeetingRoomId());
     requireActiveRoom(room);
     MeetingRoomSetting setting = findSetting(room.getId());
-    requireAllowedJoinTime(session, setting, member.getRole());
+    requireAllowedJoinTime(runtimeSession, setting, member.getRole());
 
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
@@ -68,10 +68,10 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     String participantIdentity = "user-" + currentUserId;
 
     LiveKitJoinGrant grant = new LiveKitJoinGrant(
-        session.getProviderRoomName(),
+        runtimeSession.getProviderRoomName(),
         participantIdentity,
         user.getFullName(),
-        createParticipantMetadata(session, room, member),
+        createParticipantMetadata(runtimeSession, room, member),
         true,
         canPublishMicrophone,
         canPublishCamera,
@@ -80,7 +80,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     LiveKitTokenResult tokenResult = createJoinToken(grant);
 
     return new MeetingJoinResponse(
-        session.getId(),
+        runtimeSession.getId(),
         room.getId(),
         tokenResult.websocketUrl(),
         tokenResult.participantToken(),
@@ -94,14 +94,14 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     );
   }
 
-  private MeetingSession findSession(String sessionId) {
-    if (sessionId == null || sessionId.isBlank()) {
-      throw BusinessException.notExisted(MeetingErrorConstants.SESSION_NOT_FOUND);
+  private MeetingRuntimeSession findRuntimeSession(String runtimeSessionId) {
+    if (runtimeSessionId == null || runtimeSessionId.isBlank()) {
+      throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return sessionRepository.findById(sessionId)
+    return runtimeSessionRepository.findById(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
-            MeetingErrorConstants.SESSION_NOT_FOUND,
-            sessionId
+            MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
+            runtimeSessionId
         ));
   }
 
@@ -122,11 +122,11 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
         ));
   }
 
-  private void requireActiveSession(MeetingSession session) {
-    if (session.getStatus() != MeetingSessionStatus.ACTIVE) {
+  private void requireActiveRuntimeSession(MeetingRuntimeSession runtimeSession) {
+    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
       throw BusinessException.invalidInput(
-          MeetingErrorConstants.SESSION_NOT_ACTIVE,
-          session.getId()
+          MeetingErrorConstants.RUNTIME_SESSION_NOT_ACTIVE,
+          runtimeSession.getId()
       );
     }
   }
@@ -138,7 +138,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   }
 
   private void requireAllowedJoinTime(
-      MeetingSession session,
+      MeetingRuntimeSession runtimeSession,
       MeetingRoomSetting setting,
       MeetingRole role
   ) {
@@ -146,7 +146,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
       return;
     }
 
-    Instant earliestJoin = session.getScheduledStartAt()
+    Instant earliestJoin = runtimeSession.getScheduledStartAt()
         .minusSeconds(setting.getJoinBeforeMinutes() * 60L);
     if (Instant.now().isBefore(earliestJoin)) {
       throw BusinessException.invalidInput(
@@ -157,13 +157,13 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   }
 
   private String createParticipantMetadata(
-      MeetingSession session,
+      MeetingRuntimeSession runtimeSession,
       MeetingRoom room,
       MeetingRoomMember member
   ) {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("userId", member.getUserId());
-    metadata.put("sessionId", session.getId());
+    metadata.put("runtimeSessionId", runtimeSession.getId());
     metadata.put("roomId", room.getId());
     metadata.put("meetingRole", member.getRole().name());
 

@@ -1,36 +1,42 @@
 package org.ptit.meeting.modules.meeting.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.ptit.meeting.common.base.BaseEntity;
-import org.ptit.meeting.modules.meeting.constant.enums.MeetingSessionStatus;
-
-import java.time.Instant;
+import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 
 import static lombok.AccessLevel.PROTECTED;
 
 @Entity
 @Table(
-    name = "meeting_sessions",
+    name = "meeting_runtime_sessions",
     uniqueConstraints = {
         @UniqueConstraint(
-            name = "uk_meeting_sessions_provider_room",
+            name = "uk_meeting_runtime_sessions_provider_room",
             columnNames = "provider_room_name"
         ),
         @UniqueConstraint(
-            name = "uk_meeting_sessions_schedule_occurrence",
+            name = "uk_meeting_runtime_sessions_schedule_occurrence",
             columnNames = "schedule_occurrence_id"
         )
     },
     indexes = {
         @Index(
-            name = "idx_meeting_sessions_room_schedule",
+            name = "idx_meeting_runtime_sessions_room_schedule",
             columnList = "meeting_room_id,scheduled_start_at"
         ),
         @Index(
-            name = "idx_meeting_sessions_room_status",
+            name = "idx_meeting_runtime_sessions_room_status",
             columnList = "meeting_room_id,status"
         )
     }
@@ -38,7 +44,7 @@ import static lombok.AccessLevel.PROTECTED;
 @Getter
 @Setter
 @NoArgsConstructor(access = PROTECTED)
-public class MeetingSession extends BaseEntity {
+public class MeetingRuntimeSession extends BaseEntity {
 
   @Column(name = "meeting_room_id", nullable = false, length = 36)
   private String meetingRoomId;
@@ -66,7 +72,7 @@ public class MeetingSession extends BaseEntity {
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 30)
-  private MeetingSessionStatus status;
+  private MeetingRuntimeSessionStatus status;
 
   @Column(name = "created_by_user_id", nullable = false)
   private Long createdByUserId;
@@ -75,7 +81,7 @@ public class MeetingSession extends BaseEntity {
   @Column(name = "row_version", nullable = false)
   private Long version;
 
-  public MeetingSession(
+  public MeetingRuntimeSession(
       String meetingRoomId,
       String title,
       String providerRoomName,
@@ -90,7 +96,7 @@ public class MeetingSession extends BaseEntity {
     this.scheduleOccurrenceId = scheduleOccurrenceId;
     this.scheduledStartAt = scheduledStartAt;
     this.scheduledEndAt = scheduledEndAt;
-    this.status = MeetingSessionStatus.SCHEDULED;
+    this.status = MeetingRuntimeSessionStatus.SCHEDULED;
     this.createdByUserId = createdByUserId;
   }
 }

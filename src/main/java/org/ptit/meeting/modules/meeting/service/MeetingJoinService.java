@@ -4,5 +4,5 @@ import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 
 public interface MeetingJoinService {
 
-  MeetingJoinResponse join(String sessionId, Long currentUserId);
+  MeetingJoinResponse join(String runtimeSessionId, Long currentUserId);
 }

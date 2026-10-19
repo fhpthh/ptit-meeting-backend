@@ -1,6 +1,6 @@
 package org.ptit.meeting.modules.meeting.constant.enums;
 
-public enum MeetingSessionStatus {
+public enum MeetingRuntimeSessionStatus {
   SCHEDULED,
   ACTIVE,
   ENDED,

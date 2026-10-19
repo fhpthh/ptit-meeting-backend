@@ -1,10 +1,10 @@
 package org.ptit.meeting.modules.meeting.dto.response;
 
-import org.ptit.meeting.modules.meeting.constant.enums.MeetingSessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 
 import java.time.Instant;
 
-public record MeetingSessionResponse(
+public record MeetingRuntimeSessionResponse(
     String id,
     String meetingRoomId,
     String title,
@@ -13,7 +13,7 @@ public record MeetingSessionResponse(
     Instant scheduledEndAt,
     Instant actualStartAt,
     Instant actualEndAt,
-    MeetingSessionStatus status,
+    MeetingRuntimeSessionStatus status,
     Long createdByUserId,
     Instant createdAt,
     Instant updatedAt

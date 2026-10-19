@@ -2,7 +2,7 @@ package org.ptit.meeting.modules.meeting.dto.request;
 
 import java.time.Instant;
 
-public record MeetingSessionScheduleSyncRequest(
+public record MeetingRuntimeSessionScheduleSyncRequest(
     String meetingRoomId,
     String scheduleOccurrenceId,
     String title,

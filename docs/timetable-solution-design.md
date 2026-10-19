@@ -42,6 +42,10 @@ Hệ thống PTIT Meeting Backend cần cung cấp API cho phép Cán bộ Phòn
 5. **Cấp phát Phòng học số (`rooms`):** Đối với các lớp học trực tuyến (`is_online = true`), tự động cấp một phòng họp số cố định kèm mã PIN ngẫu nhiên bảo mật.
 6. **Tự động sinh các Buổi học số (`meeting_sessions`):** Dựa vào ngày bắt đầu của học kỳ (`semesters.start_date`), tính toán chính xác ngày dương lịch của từng buổi học số theo từng tuần và sinh sẵn lịch trong CSDL.
 
+> **Ranh giới dữ liệu:** Bảng `meeting_sessions` trong tài liệu này thuộc module `timetable`. Module `meeting`
+> dùng entity `MeetingRuntimeSession` và bảng `meeting_runtime_sessions` cho vòng đời phòng LiveKit. Hai bảng
+> không dùng chung schema vì được hai module sở hữu độc lập.
+
 ### 1.3. Thách thức kỹ thuật của file Excel thực tế
 File Excel của PTIT không phải là bảng dữ liệu thô dạng bảng đơn giản (flat table) mà có cấu trúc nghiệp vụ phức tạp:
 - **Dòng tiêu đề trôi (Dynamic Header):** 4 dòng đầu là banner Học viện và thông tin quyết định đào tạo; dòng tiêu đề nằm ở Dòng 7.

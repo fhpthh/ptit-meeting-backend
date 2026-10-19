@@ -32,7 +32,7 @@ public class MeetingAuthorizationServiceImpl implements MeetingAuthorizationServ
     }
 
     @Override
-    public void requireSessionHost(String roomId, Long userId) {
+    public void requireRuntimeSessionHost(String roomId, Long userId) {
         MeetingRole role = findActiveMember(roomId, userId).getRole();
         if (role != MeetingRole.OWNER && role != MeetingRole.HOST) {
             throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);

@@ -26,6 +26,19 @@ chỉ tạo khi feature thực sự cần.
 
 ## 2. Quy tắc đặt tên
 
+Tên class được Spring/JPA quản lý phải duy nhất trong toàn ứng dụng, không chỉ trong từng package. Khi hai
+module có cùng thuật ngữ nghiệp vụ, entity và repository phải thêm ngữ cảnh phân biệt để tránh trùng bean name,
+JPA entity name và table ownership. Ví dụ:
+
+```text
+modules.timetable.entity.MeetingSession              -> meeting_sessions
+modules.meeting.entity.MeetingRuntimeSession         -> meeting_runtime_sessions
+modules.timetable.repository.MeetingSessionRepository
+modules.meeting.repository.MeetingRuntimeSessionRepository
+```
+
+Tên API, DTO và service có thể giữ thuật ngữ nghiệp vụ công khai nếu chúng không tạo bean/entity xung đột.
+
 Giả sử feature là `room` và resource chính là `Room`:
 
 | Vai trò | Package | Tên chuẩn |
