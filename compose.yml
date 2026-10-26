@@ -32,18 +32,25 @@ services:
           tcp_port: 7881
           udp_port: 7882
           use_external_ip: false
-          node_ip: 127.0.0.1
-          enable_loopback_candidate: true
+          node_ip: 172.16.9.58
         redis:
           address: redis:6379
         keys:
           "${LIVEKIT_API_KEY:?Set LIVEKIT_API_KEY in .env}": "${LIVEKIT_API_SECRET:?Set LIVEKIT_API_SECRET in .env}"
+        webhook:
+          api_key: "${LIVEKIT_API_KEY:?Set LIVEKIT_API_KEY in .env}"
+          urls:
+            - "${LIVEKIT_WEBHOOK_URL:-http://host.docker.internal:8080/api/v1/integrations/livekit/webhook}"
     ports:
       - "127.0.0.1:7880:7880"
-      - "127.0.0.1:7881:7881/tcp"
-      - "127.0.0.1:7882:7882/udp"
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:7880/ > /dev/null 2>&1 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O - http://127.0.0.1:7880/ > /dev/null 2>&1 || exit 1",
+        ]
       interval: 5s
       timeout: 3s
       retries: 15

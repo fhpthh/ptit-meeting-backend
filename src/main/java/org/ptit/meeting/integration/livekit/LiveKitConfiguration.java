@@ -1,6 +1,7 @@
 package org.ptit.meeting.integration.livekit;
 
 import io.livekit.server.LiveKitAPI;
+import io.livekit.server.WebhookReceiver;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -37,6 +38,19 @@ public class LiveKitConfiguration {
       LiveKitTokenFactory tokenFactory
   ) {
     return new LiveKitGatewayImpl(liveKitApi, tokenFactory);
+  }
+
+  @Bean
+  @ConditionalOnProperty(prefix = "application.livekit", name = "enabled", havingValue = "true")
+  public WebhookReceiver liveKitWebhookReceiver(LiveKitProperties properties) {
+    validateEnabledConfiguration(properties);
+    return new WebhookReceiver(properties.getApiKey(), properties.getApiSecret());
+  }
+
+  @Bean
+  @ConditionalOnProperty(prefix = "application.livekit", name = "enabled", havingValue = "true")
+  public LiveKitWebhookVerifier liveKitWebhookVerifier(WebhookReceiver webhookReceiver) {
+    return new LiveKitWebhookVerifierImpl(webhookReceiver);
   }
 
   @Bean

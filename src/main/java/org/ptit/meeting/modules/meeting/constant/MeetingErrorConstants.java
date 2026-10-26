@@ -36,6 +36,10 @@ public final class MeetingErrorConstants {
   public static final String JOIN_TOO_EARLY = "error.meeting.join.too-early";
   public static final String JOIN_FAILED = "error.meeting.join.failed";
   public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";
+  public static final String WEBHOOK_SIGNATURE_INVALID =
+      "error.meeting.webhook.signature-invalid";
+  public static final String WEBHOOK_PAYLOAD_INVALID =
+      "error.meeting.webhook.payload-invalid";
   public static final String ACCESS_DENIED = "error.meeting.access-denied";
 
   private MeetingErrorConstants() {

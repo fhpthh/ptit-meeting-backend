@@ -10,6 +10,8 @@ public interface MeetingRuntimeSessionRepository
 
   Optional<MeetingRuntimeSession> findByScheduleOccurrenceId(String scheduleOccurrenceId);
 
+  Optional<MeetingRuntimeSession> findByProviderRoomName(String providerRoomName);
+
   List<MeetingRuntimeSession> findAllByMeetingRoomIdOrderByScheduledStartAtAsc(
       String meetingRoomId
   );

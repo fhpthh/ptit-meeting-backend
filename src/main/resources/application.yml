@@ -51,7 +51,7 @@ azure:
 
 application:
   livekit:
-    enabled: ${LIVEKIT_ENABLED:false}
+    enabled: ${LIVEKIT_ENABLED:true}
     api-url: ${LIVEKIT_API_URL:http://localhost:7880}
     websocket-url: ${LIVEKIT_WS_URL:ws://localhost:7880}
     api-key: ${LIVEKIT_API_KEY:}
