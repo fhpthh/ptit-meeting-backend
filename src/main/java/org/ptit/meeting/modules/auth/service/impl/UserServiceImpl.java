@@ -1,6 +1,8 @@
 package org.ptit.meeting.modules.auth.service.impl;
 
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.common.constant.ErrorConstants;
@@ -82,6 +84,15 @@ public class UserServiceImpl implements UserService {
         .orElseThrow(() -> BusinessException.notExisted(ErrorConstants.DATA_NOT_FOUND, userId));
     enrichAuthorities(user);
     return user;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<User> getUsersByIds(Collection<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return List.of();
+    }
+    return userRepository.findAllById(userIds);
   }
 
   @Override

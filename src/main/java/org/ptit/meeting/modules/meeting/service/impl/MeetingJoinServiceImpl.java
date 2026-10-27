@@ -28,6 +28,7 @@ import org.ptit.meeting.modules.meeting.repository.MeetingRoomSettingRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
+import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +40,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private final MeetingRoomRepository roomRepository;
   private final MeetingRoomSettingRepository settingRepository;
   private final MeetingAuthorizationService authorizationService;
+  private final MeetingModerationService moderationService;
   private final UserService userService;
   private final ObjectMapper objectMapper;
   private final LiveKitGateway liveKitGateway;
@@ -52,6 +54,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
         currentUserId
     );
     requireActiveRuntimeSession(runtimeSession);
+    moderationService.requireNotBanned(runtimeSession.getId(), currentUserId);
 
     MeetingRoom room = findRoom(runtimeSession.getMeetingRoomId());
     requireActiveRoom(room);

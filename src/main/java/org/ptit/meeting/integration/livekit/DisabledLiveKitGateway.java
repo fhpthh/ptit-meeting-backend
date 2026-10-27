@@ -15,6 +15,20 @@ final class DisabledLiveKitGateway implements LiveKitGateway {
     throw disabledException();
   }
 
+  @Override
+  public boolean mutePublishedTrack(
+      String roomName,
+      String participantIdentity,
+      String trackSid
+  ) {
+    throw disabledException();
+  }
+
+  @Override
+  public boolean removeParticipant(String roomName, String participantIdentity) {
+    throw disabledException();
+  }
+
   private LiveKitIntegrationException disabledException() {
     return new LiveKitIntegrationException("LiveKit integration is disabled");
   }

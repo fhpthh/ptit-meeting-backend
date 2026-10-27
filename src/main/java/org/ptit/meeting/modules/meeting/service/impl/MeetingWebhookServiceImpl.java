@@ -13,6 +13,7 @@ import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.LiveKitWebhookEventService;
 import org.ptit.meeting.modules.meeting.service.MeetingAttendanceService;
+import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingWebhookService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
 
   private final LiveKitWebhookEventService webhookEventService;
   private final MeetingAttendanceService attendanceService;
+  private final MeetingModerationService moderationService;
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final ObjectMapper objectMapper;
 
@@ -78,6 +80,13 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
     if (metadata.isEmpty()
         || !isConsistent(payload, runtimeSession.get(), metadata.get())) {
       return ProcessingOutcome.ignored("PARTICIPANT_METADATA_INVALID");
+    }
+    if (PARTICIPANT_JOINED.equals(payload.eventType())
+        && moderationService.enforceBan(
+            runtimeSession.get().getId(),
+            metadata.get().userId()
+        )) {
+      return ProcessingOutcome.ignored("PARTICIPANT_BANNED");
     }
     if (PARTICIPANT_JOINED.equals(payload.eventType())
         && runtimeSession.get().getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {

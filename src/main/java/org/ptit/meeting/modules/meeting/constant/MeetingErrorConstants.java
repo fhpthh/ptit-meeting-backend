@@ -41,6 +41,16 @@ public final class MeetingErrorConstants {
   public static final String WEBHOOK_PAYLOAD_INVALID =
       "error.meeting.webhook.payload-invalid";
   public static final String ACCESS_DENIED = "error.meeting.access-denied";
+  public static final String MODERATION_SELF_ACTION =
+      "error.meeting.moderation.self-action";
+  public static final String MODERATION_TARGET_PROTECTED =
+      "error.meeting.moderation.target-protected";
+  public static final String MODERATION_PARTICIPANT_NOT_CONNECTED =
+      "error.meeting.moderation.participant-not-connected";
+  public static final String SESSION_PARTICIPANT_BANNED =
+      "error.meeting.moderation.participant-banned";
+  public static final String SESSION_BAN_NOT_FOUND =
+      "error.meeting.moderation.ban-not-found";
 
   private MeetingErrorConstants() {
   }

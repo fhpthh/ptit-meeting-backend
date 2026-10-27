@@ -2,6 +2,7 @@ package org.ptit.meeting.integration.livekit;
 
 import io.livekit.server.LiveKitAPI;
 import java.io.IOException;
+import livekit.LivekitModels.TrackInfo;
 import org.ptit.meeting.integration.livekit.dto.LiveKitJoinGrant;
 import org.ptit.meeting.integration.livekit.dto.LiveKitTokenResult;
 import org.slf4j.Logger;
@@ -27,9 +28,7 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
 
   @Override
   public void deleteRoom(String roomName) {
-    if (roomName == null || roomName.isBlank()) {
-      throw new LiveKitIntegrationException("LiveKit room name is invalid");
-    }
+    requireText(roomName, "LiveKit room name is invalid");
 
     try {
       Response<Void> response = liveKitApi.getRoom().deleteRoom(roomName).execute();
@@ -60,6 +59,109 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
     } catch (RuntimeException exception) {
       log.warn("Unexpected LiveKit room deletion failure: roomName={}", roomName);
       throw new LiveKitIntegrationException("LiveKit room deletion failed", exception);
+    }
+  }
+
+  @Override
+  public boolean mutePublishedTrack(
+      String roomName,
+      String participantIdentity,
+      String trackSid
+  ) {
+    requireText(roomName, "LiveKit room name is invalid");
+    requireText(participantIdentity, "LiveKit participant identity is invalid");
+    requireText(trackSid, "LiveKit track SID is invalid");
+
+    try {
+      Response<TrackInfo> response = liveKitApi.getRoom()
+          .mutePublishedTrack(roomName, participantIdentity, trackSid, true)
+          .execute();
+      if (response.isSuccessful()) {
+        return true;
+      }
+      return handleParticipantOperationFailure(
+          response,
+          "mute participant track",
+          roomName,
+          participantIdentity
+      );
+    } catch (LiveKitIntegrationException exception) {
+      throw exception;
+    } catch (IOException exception) {
+      throw connectionFailure("mute participant track", exception);
+    } catch (RuntimeException exception) {
+      throw unexpectedFailure("mute participant track", exception);
+    }
+  }
+
+  @Override
+  public boolean removeParticipant(String roomName, String participantIdentity) {
+    requireText(roomName, "LiveKit room name is invalid");
+    requireText(participantIdentity, "LiveKit participant identity is invalid");
+
+    try {
+      Response<Void> response = liveKitApi.getRoom()
+          .removeParticipant(roomName, participantIdentity)
+          .execute();
+      if (response.isSuccessful()) {
+        return true;
+      }
+      return handleParticipantOperationFailure(
+          response,
+          "remove participant",
+          roomName,
+          participantIdentity
+      );
+    } catch (LiveKitIntegrationException exception) {
+      throw exception;
+    } catch (IOException exception) {
+      throw connectionFailure("remove participant", exception);
+    } catch (RuntimeException exception) {
+      throw unexpectedFailure("remove participant", exception);
+    }
+  }
+
+  private boolean handleParticipantOperationFailure(
+      Response<?> response,
+      String operation,
+      String roomName,
+      String participantIdentity
+  ) {
+    int httpStatus = response.code();
+    closeErrorBody(response);
+    if (httpStatus == 400 || httpStatus == 404) {
+      return false;
+    }
+
+    log.warn(
+        "LiveKit {} failed: roomName={}, participantIdentity={}, httpStatus={}",
+        operation,
+        roomName,
+        participantIdentity,
+        httpStatus
+    );
+    throw new LiveKitIntegrationException("LiveKit participant operation failed");
+  }
+
+  private LiveKitIntegrationException connectionFailure(
+      String operation,
+      IOException exception
+  ) {
+    log.warn("Unable to reach LiveKit while attempting to {}", operation);
+    return new LiveKitIntegrationException("Unable to reach LiveKit", exception);
+  }
+
+  private LiveKitIntegrationException unexpectedFailure(
+      String operation,
+      RuntimeException exception
+  ) {
+    log.warn("Unexpected LiveKit failure while attempting to {}", operation);
+    return new LiveKitIntegrationException("LiveKit participant operation failed", exception);
+  }
+
+  private void requireText(String value, String message) {
+    if (value == null || value.isBlank()) {
+      throw new LiveKitIntegrationException(message);
     }
   }
 
