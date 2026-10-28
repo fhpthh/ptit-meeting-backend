@@ -2,6 +2,8 @@ package org.ptit.meeting.integration.livekit;
 
 import io.livekit.server.LiveKitAPI;
 import java.io.IOException;
+import java.util.List;
+import livekit.LivekitModels.DataPacket;
 import livekit.LivekitModels.TrackInfo;
 import org.ptit.meeting.integration.livekit.dto.LiveKitJoinGrant;
 import org.ptit.meeting.integration.livekit.dto.LiveKitTokenResult;
@@ -118,6 +120,50 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
       throw connectionFailure("remove participant", exception);
     } catch (RuntimeException exception) {
       throw unexpectedFailure("remove participant", exception);
+    }
+  }
+
+  @Override
+  public void broadcastReliableData(String roomName, byte[] data, String topic) {
+    requireText(roomName, "LiveKit room name is invalid");
+    requireText(topic, "LiveKit data topic is invalid");
+    if (data == null || data.length == 0) {
+      throw new LiveKitIntegrationException("LiveKit data payload is invalid");
+    }
+
+    try {
+      Response<Void> response = liveKitApi.getRoom()
+          .sendData(
+              roomName,
+              data,
+              DataPacket.Kind.RELIABLE,
+              List.of(),
+              List.of(),
+              topic
+          )
+          .execute();
+      if (response.isSuccessful()) {
+        return;
+      }
+
+      int httpStatus = response.code();
+      closeErrorBody(response);
+      log.warn(
+          "LiveKit reliable data broadcast failed: roomName={}, topic={}, httpStatus={}",
+          roomName,
+          topic,
+          httpStatus
+      );
+      throw new LiveKitIntegrationException("LiveKit data broadcast failed");
+    } catch (LiveKitIntegrationException exception) {
+      throw exception;
+    } catch (IOException exception) {
+      throw new LiveKitIntegrationException(
+          "Unable to reach LiveKit while broadcasting data",
+          exception
+      );
+    } catch (RuntimeException exception) {
+      throw new LiveKitIntegrationException("LiveKit data broadcast failed", exception);
     }
   }
 

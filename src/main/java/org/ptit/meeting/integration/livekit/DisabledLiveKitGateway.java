@@ -29,6 +29,11 @@ final class DisabledLiveKitGateway implements LiveKitGateway {
     throw disabledException();
   }
 
+  @Override
+  public void broadcastReliableData(String roomName, byte[] data, String topic) {
+    throw disabledException();
+  }
+
   private LiveKitIntegrationException disabledException() {
     return new LiveKitIntegrationException("LiveKit integration is disabled");
   }

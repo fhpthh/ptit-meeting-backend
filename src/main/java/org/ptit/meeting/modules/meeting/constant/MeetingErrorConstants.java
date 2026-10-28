@@ -51,6 +51,16 @@ public final class MeetingErrorConstants {
       "error.meeting.moderation.participant-banned";
   public static final String SESSION_BAN_NOT_FOUND =
       "error.meeting.moderation.ban-not-found";
+  public static final String CHAT_MESSAGE_INVALID =
+      "error.meeting.chat.message-invalid";
+  public static final String CHAT_CURSOR_INVALID =
+      "error.meeting.chat.cursor-invalid";
+  public static final String CHAT_HISTORY_LIMIT_INVALID =
+      "error.meeting.chat.history-limit-invalid";
+  public static final String CHAT_RATE_LIMIT_EXCEEDED =
+      "error.meeting.chat.rate-limit-exceeded";
+  public static final String CHAT_UNAVAILABLE =
+      "error.meeting.chat.unavailable";
 
   private MeetingErrorConstants() {
   }

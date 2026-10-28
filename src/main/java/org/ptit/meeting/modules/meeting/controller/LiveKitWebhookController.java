@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.meeting.controller;
 
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.integration.livekit.LiveKitWebhookVerifier;
 import org.ptit.meeting.integration.livekit.dto.LiveKitWebhookPayload;
@@ -30,11 +31,14 @@ public class LiveKitWebhookController {
       consumes = {WEBHOOK_MEDIA_TYPE, MediaType.APPLICATION_JSON_VALUE}
   )
   public ResponseEntity<Void> receive(
-      @RequestBody String rawBody,
+      @RequestBody byte[] rawBody,
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false)
       String authorizationHeader
   ) {
-    LiveKitWebhookPayload payload = webhookVerifier.verify(rawBody, authorizationHeader);
+    LiveKitWebhookPayload payload = webhookVerifier.verify(
+        new String(rawBody, StandardCharsets.UTF_8),
+        authorizationHeader
+    );
     webhookService.process(payload);
     return ResponseEntity.ok().build();
   }
