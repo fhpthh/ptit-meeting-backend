@@ -8,6 +8,7 @@ import java.util.List;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 /**
  * Repository thao tác với bảng semesters (Quản lý Học kỳ & Năm học).
  */
@@ -34,5 +35,22 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
   List<Semester> findAllAvailableForStudent(
       @Param("studentId") Long studentId,
       @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus
+  );
+
+  @Query("""
+    SELECT DISTINCT semester
+    FROM Semester semester
+    JOIN ClassSection section
+      ON section.semesterId = semester.id
+    JOIN ClassSchedule schedule
+      ON schedule.classSectionId = section.id
+    WHERE section.lecturerId = :lecturerId
+      AND section.status = :sectionStatus
+      AND schedule.isOnline = true
+    ORDER BY semester.startDate DESC
+    """)
+  List<Semester> findAllAvailableForLecturer(
+      @Param("lecturerId") Long lecturerId,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus
   );
 }
