@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.ptit.meeting.modules.timetable.dto.internal.LecturerOnlineScheduleRow;
+import org.ptit.meeting.modules.timetable.dto.internal.LecturerScheduleTimeRow;
 
 @Repository
 public interface MeetingSessionRepository extends JpaRepository<MeetingSession, Long> {
@@ -130,6 +132,81 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       @Param("studentId") Long studentId,
       @Param("semesterId") Long semesterId,
       @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus
+  );
+
+  @Query("""
+    SELECT new org.ptit.meeting.modules.timetable.dto.internal.LecturerOnlineScheduleRow(
+        session.id,
+        session.scheduleId,
+        session.roomId,
+
+        session.studyDate,
+        session.scheduledStart,
+        session.scheduledEnd,
+        session.status,
+
+        schedule.startPeriod,
+        schedule.numPeriods,
+
+        section.id,
+        section.classCode,
+        section.groupNumber,
+        section.practiceGroup,
+        section.managementClass,
+
+        section.lecturerId,
+        section.lecturerName,
+
+        subject.code,
+        subject.name,
+
+        room.name
+    )
+    FROM MeetingSession session
+    JOIN ClassSchedule schedule
+      ON schedule.id = session.scheduleId
+    JOIN ClassSection section
+      ON section.id = schedule.classSectionId
+    JOIN Subject subject
+      ON subject.id = section.subjectId
+    JOIN Room room
+      ON room.id = session.roomId
+    WHERE section.lecturerId = :lecturerId
+      AND section.semesterId = :semesterId
+      AND section.status = :sectionStatus
+      AND room.status = :roomStatus
+      AND schedule.isOnline = true
+      AND session.studyDate BETWEEN :weekStart AND :weekEnd
+    ORDER BY session.studyDate ASC, session.scheduledStart ASC
+    """)
+  List<LecturerOnlineScheduleRow> findLecturerWeeklyOnlineSchedule(
+      @Param("lecturerId") Long lecturerId,
+      @Param("semesterId") Long semesterId,
+      @Param("weekStart") LocalDate weekStart,
+      @Param("weekEnd") LocalDate weekEnd,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus,
+      @Param("roomStatus") RoomStatus roomStatus
+  );
+
+  @Query("""
+    SELECT new org.ptit.meeting.modules.timetable.dto.internal.LecturerScheduleTimeRow(
+        session.scheduledStart,
+        session.scheduledEnd
+    )
+    FROM MeetingSession session
+    JOIN ClassSchedule schedule
+      ON schedule.id = session.scheduleId
+    JOIN ClassSection section
+      ON section.id = schedule.classSectionId
+    WHERE section.lecturerId = :lecturerId
+      AND section.semesterId = :semesterId
+      AND section.status = :sectionStatus
+      AND schedule.isOnline = true
+    """)
+  List<LecturerScheduleTimeRow> findLecturerSemesterOnlineSessionTimes(
+      @Param("lecturerId") Long lecturerId,
+      @Param("semesterId") Long semesterId,
       @Param("sectionStatus") ClassSectionStatus sectionStatus
   );
 }
