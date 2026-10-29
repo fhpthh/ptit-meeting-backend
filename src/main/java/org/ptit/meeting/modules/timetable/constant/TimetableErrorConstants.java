@@ -8,7 +8,7 @@ public class TimetableErrorConstants {
   public static final String EXCEL_HEADER_INVALID = "error.timetable.excel.header-invalid";
   public static final String IMPORT_IN_PROGRESS = "error.timetable.import.in-progress";
   public static final String LECTURER_CONFLICT = "error.timetable.conflict.lecturer";
-
+  public static final String WEEK_INVALID = "error.timetable.week.invalid";
   private TimetableErrorConstants() {
   }
 
