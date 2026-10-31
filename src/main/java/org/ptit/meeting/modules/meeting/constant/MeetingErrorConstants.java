@@ -61,6 +61,10 @@ public final class MeetingErrorConstants {
       "error.meeting.chat.rate-limit-exceeded";
   public static final String CHAT_UNAVAILABLE =
       "error.meeting.chat.unavailable";
+  public static final String HAND_RAISE_NOT_ALLOWED =
+      "error.meeting.hand-raise.not-allowed";
+  public static final String HAND_RAISE_UNAVAILABLE =
+      "error.meeting.hand-raise.unavailable";
 
   private MeetingErrorConstants() {
   }

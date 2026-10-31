@@ -6,6 +6,7 @@ import org.ptit.meeting.integration.livekit.LiveKitGateway;
 import org.ptit.meeting.integration.livekit.LiveKitIntegrationException;
 import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.service.MeetingChatService;
+import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -17,10 +18,12 @@ public class MeetingRuntimeSessionEndedListener {
 
   private final LiveKitGateway liveKitGateway;
   private final MeetingChatService chatService;
+  private final MeetingHandRaiseService handRaiseService;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void cleanupRuntimeSession(MeetingRuntimeSessionEndedEvent event) {
     chatService.clearHistory(event.runtimeSessionId());
+    handRaiseService.clear(event.runtimeSessionId());
     try {
       liveKitGateway.deleteRoom(event.providerRoomName());
     } catch (LiveKitIntegrationException exception) {

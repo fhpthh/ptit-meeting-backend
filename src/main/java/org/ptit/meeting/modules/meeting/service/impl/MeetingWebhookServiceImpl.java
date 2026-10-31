@@ -13,6 +13,7 @@ import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.LiveKitWebhookEventService;
 import org.ptit.meeting.modules.meeting.service.MeetingAttendanceService;
+import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
 import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingWebhookService;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,6 +31,7 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
 
   private final LiveKitWebhookEventService webhookEventService;
   private final MeetingAttendanceService attendanceService;
+  private final MeetingHandRaiseService handRaiseService;
   private final MeetingModerationService moderationService;
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final ObjectMapper objectMapper;
@@ -101,17 +103,29 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
         payload.createdAt(),
         payload.disconnectReason()
     );
-    processConnectionEvent(payload.eventType(), connectionEvent);
+    processConnectionEvent(
+        payload.eventType(),
+        connectionEvent,
+        runtimeSession.get().getProviderRoomName()
+    );
     return ProcessingOutcome.processedSuccessfully();
   }
 
   private void processConnectionEvent(
       String eventType,
-      ParticipantConnectionEvent connectionEvent
+      ParticipantConnectionEvent connectionEvent,
+      String providerRoomName
   ) {
     switch (eventType) {
       case PARTICIPANT_JOINED -> attendanceService.recordJoined(connectionEvent);
-      case PARTICIPANT_LEFT -> attendanceService.recordLeft(connectionEvent);
+      case PARTICIPANT_LEFT -> {
+        attendanceService.recordLeft(connectionEvent);
+        handRaiseService.removeDisconnected(
+            connectionEvent.runtimeSessionId(),
+            providerRoomName,
+            connectionEvent.userId()
+        );
+      }
       case PARTICIPANT_CONNECTION_ABORTED -> attendanceService.recordAborted(connectionEvent);
       default -> throw new IllegalStateException("Unsupported participant event type");
     }
