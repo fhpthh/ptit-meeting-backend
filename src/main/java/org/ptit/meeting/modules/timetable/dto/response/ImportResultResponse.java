@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.timetable.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -27,7 +28,10 @@ public class ImportResultResponse {
   private int successRows;
   private int failureRows;
   private ImportStatistics statistics;
+
+  @JsonInclude(JsonInclude.Include.NON_EMPTY)
   private List<ImportRowError> errors;
+
   private LocalDateTime completedAt;
 
   @Getter
@@ -36,6 +40,7 @@ public class ImportResultResponse {
   @AllArgsConstructor
   @Builder
   public static class ImportStatistics {
+
     private int headerRow;
     private int dataStartRow;
     private int totalWeeksDetected;

@@ -1,5 +1,7 @@
 package org.ptit.meeting.modules.timetable.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -49,10 +51,12 @@ public class TimetableServiceImpl implements TimetableService {
   private final MeetingSessionRepository sessionRepository;
   private final UserRepository userRepository;
   private final ScheduleDateCalculator dateCalculator;
+  private final ObjectMapper objectMapper;
 
   @Override
   @Transactional
-  public TimetableProcessResult processMasterTimetable(Long semesterId, List<MasterTimetableRowDto> rows,
+  public TimetableProcessResult processMasterTimetable(Long semesterId,
+      List<MasterTimetableRowDto> rows,
       List<ImportRowError> errors) {
     Semester semester = semesterRepository.findById(semesterId)
         .orElseThrow(
@@ -67,11 +71,13 @@ public class TimetableServiceImpl implements TimetableService {
 
     for (MasterTimetableRowDto row : rows) {
       try {
-        processSingleRow(semester, row, processedSubjects, processedClassSections, onlineRoomsAllocated, meetingSessionsGenerated);
+        processSingleRow(semester, row, processedSubjects, processedClassSections,
+            onlineRoomsAllocated, meetingSessionsGenerated);
         successCount++;
         schedulesSaved++;
       } catch (Exception e) {
-        log.warn("(processMasterTimetable) Error processing row {}: {}", row.getRowNumber(), e.getMessage());
+        log.warn("(processMasterTimetable) Error processing row {}: {}", row.getRowNumber(),
+            e.getMessage());
         errors.add(new ImportRowError(row.getRowNumber(), e.getMessage()));
       }
     }
@@ -100,7 +106,7 @@ public class TimetableServiceImpl implements TimetableService {
     ClassSection section = upsertClassSection(semester.getId(), subject.getId(), dto);
     processedClassSections.add(section.getClassCode());
 
-    ClassSchedule schedule = saveClassSchedule(section.getId(), dto);
+    ClassSchedule schedule = upsertClassSchedule(section.getId(), dto);
 
     if (dto.isOnline()) {
       Room room = allocateOnlineRoom(section, onlineRoomsAllocated);
@@ -124,6 +130,15 @@ public class TimetableServiceImpl implements TimetableService {
       MasterTimetableRowDto dto) {
     Long lecturerId = findLecturerId(dto.getLecturerName());
     return classSectionRepository.findByClassCodeAndSemesterId(dto.getClassCode(), semesterId)
+        .map(existing -> {
+          if (lecturerId != null && existing.getLecturerId() == null) {
+            existing.setLecturerId(lecturerId);
+          }
+          if (dto.getLecturerName() != null) {
+            existing.setLecturerName(dto.getLecturerName());
+          }
+          return classSectionRepository.save(existing);
+        })
         .orElseGet(() -> classSectionRepository.save(
             ClassSection.builder()
                 .semesterId(semesterId)
@@ -144,26 +159,53 @@ public class TimetableServiceImpl implements TimetableService {
     if (lecturerName == null || lecturerName.isBlank()) {
       return null;
     }
-    return userRepository.findByEmailOrCode(lecturerName, lecturerName)
+    String cleanName = lecturerName.trim();
+
+    return userRepository.findAllByFullNameIgnoreCase(cleanName).stream()
+        .findFirst()
         .map(User::getId)
-        .orElse(null);
+        .orElseGet(() -> userRepository.findByEmailOrCode(cleanName, cleanName)
+            .map(User::getId)
+            .orElse(null));
   }
 
-  private ClassSchedule saveClassSchedule(Long classSectionId, MasterTimetableRowDto dto) {
-    return classScheduleRepository.save(
-        ClassSchedule.builder()
-            .classSectionId(classSectionId)
-            .dayOfWeek(dto.getDayOfWeek())
-            .startPeriod(dto.getStartPeriod())
-            .numPeriods(dto.getNumPeriods())
-            .startTime(dto.getStartTime())
-            .endTime(dto.getEndTime())
-            .weeksPattern(dto.getActiveWeeks().toString())
-            .roomText(dto.getRoomText())
-            .building(dto.getBuilding())
-            .isOnline(dto.isOnline())
-            .build()
-    );
+  private ClassSchedule upsertClassSchedule(Long classSectionId, MasterTimetableRowDto dto) {
+    String weeksPatternJson = toJsonWeeks(dto.getActiveWeeks());
+
+    return classScheduleRepository.findByClassSectionIdAndDayOfWeekAndStartPeriod(
+            classSectionId, dto.getDayOfWeek(), dto.getStartPeriod())
+        .map(existing -> {
+          existing.setNumPeriods(dto.getNumPeriods());
+          existing.setStartTime(dto.getStartTime());
+          existing.setEndTime(dto.getEndTime());
+          existing.setWeeksPattern(weeksPatternJson);
+          existing.setRoomText(dto.getRoomText());
+          existing.setBuilding(dto.getBuilding());
+          existing.setOnline(dto.isOnline());
+          return classScheduleRepository.save(existing);
+        })
+        .orElseGet(() -> classScheduleRepository.save(
+            ClassSchedule.builder()
+                .classSectionId(classSectionId)
+                .dayOfWeek(dto.getDayOfWeek())
+                .startPeriod(dto.getStartPeriod())
+                .numPeriods(dto.getNumPeriods())
+                .startTime(dto.getStartTime())
+                .endTime(dto.getEndTime())
+                .weeksPattern(weeksPatternJson)
+                .roomText(dto.getRoomText())
+                .building(dto.getBuilding())
+                .isOnline(dto.isOnline())
+                .build()
+        ));
+  }
+
+  private String toJsonWeeks(Set<Integer> weeks) {
+    try {
+      return objectMapper.writeValueAsString(weeks);
+    } catch (JsonProcessingException e) {
+      return weeks.toString();
+    }
   }
 
   private Room allocateOnlineRoom(ClassSection section, AtomicInteger onlineRoomsAllocated) {
@@ -181,6 +223,7 @@ public class TimetableServiceImpl implements TimetableService {
         });
   }
 
+  // Chống nhân đôi session khi re-import
   private int generateOnlineSessions(LocalDate semesterStart, ClassSchedule sched, Room room,
       MasterTimetableRowDto dto) {
     int count = 0;

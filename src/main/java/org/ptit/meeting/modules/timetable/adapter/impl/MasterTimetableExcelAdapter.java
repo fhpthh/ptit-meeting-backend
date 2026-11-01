@@ -1,12 +1,14 @@
 package org.ptit.meeting.modules.timetable.adapter.impl;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -20,16 +22,18 @@ import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportType;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
+import org.ptit.meeting.modules.timetable.service.PeriodTimeCalculator;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTimetableRowDto> {
 
-  private final Map<String, Integer> colIndexMap = new HashMap<>();
-  private final Map<Integer, Integer> weekToColMap = new HashMap<>(); // Tuần (1..25) -> Cột index
-  private int dataStartRow = 12;
-  private int headerRowIndex = 6;
+  private static final DataFormatter DATA_FORMATTER = new DataFormatter();
+  private final PeriodTimeCalculator periodTimeCalculator;
+  private final ThreadLocal<SheetParseContext> currentContext = ThreadLocal.withInitial(
+      SheetParseContext::new);
 
   @Override
   public ImportType getSupportedType() {
@@ -38,13 +42,18 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
 
   @Override
   public void initializeHeader(Sheet sheet) {
-    colIndexMap.clear();
-    weekToColMap.clear();
+    SheetParseContext ctx = new SheetParseContext();
+    currentContext.set(ctx);
 
-    this.headerRowIndex = scanHeaderRow(sheet);
-    mapCoreColumns(sheet.getRow(this.headerRowIndex));
-    mapWeekColumnsByNumber(sheet, this.headerRowIndex);
-    determineDataStartRow(sheet, this.headerRowIndex);
+    ctx.headerRowIndex = scanHeaderRow(sheet);
+    mapCoreColumns(sheet.getRow(ctx.headerRowIndex), ctx);
+    mapWeekColumnsByNumber(sheet, ctx.headerRowIndex, ctx);
+    determineDataStartRow(sheet, ctx.headerRowIndex, ctx);
+    extractDetectedStartDate(sheet, ctx);
+  }
+
+  public LocalDate getDetectedStartDate() {
+    return currentContext.get().detectedStartDate;
   }
 
   private int scanHeaderRow(Sheet sheet) {
@@ -54,6 +63,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       if (row == null) {
         continue;
       }
+
       boolean hasSubject = false, hasDay = false, hasPeriod = false;
       for (Cell cell : row) {
         String text = normalize(getCellValueAsString(cell));
@@ -72,51 +82,52 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
         return r;
       }
     }
-    log.error("(scanHeaderRow) Could not find valid header row within the first 25 rows of Excel file!");
     throw BusinessException.invalidInputFile(TimetableErrorConstants.EXCEL_HEADER_INVALID);
   }
 
-  private void mapCoreColumns(Row headerRow) {
+  private void mapCoreColumns(Row headerRow, SheetParseContext ctx) {
     for (int c = 0; c < headerRow.getLastCellNum(); c++) {
       String text = normalize(getCellValueAsString(headerRow.getCell(c)));
       if (text.contains("mamon")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_CODE, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_CODE, c);
       } else if (text.contains("tenmon")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_NAME, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_SUBJECT_NAME, c);
       } else if (text.equals("khoa")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_COHORT, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_COHORT, c);
       } else if (text.equals("nhom")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_GROUP, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_GROUP, c);
       } else if (text.contains("toth")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_PRACTICE, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_PRACTICE, c);
       } else if (text.equals("thu")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_DAY, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_DAY, c);
       } else if (text.contains("tietbd")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_START_PERIOD, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_START_PERIOD, c);
       } else if (text.contains("sotiet")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_NUM_PERIODS, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_NUM_PERIODS, c);
       } else if (text.contains("giangvien")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_LECTURER, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_LECTURER, c);
       } else if (text.equals("phong")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_ROOM, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_ROOM, c);
       } else if (text.equals("nha")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_BUILDING, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_BUILDING, c);
       } else if (text.contains("malop")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_MANAGEMENT_CLASS, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_MANAGEMENT_CLASS, c);
       } else if (text.contains("sotc")) {
-        colIndexMap.putIfAbsent(TimetableConstants.HEADER_CREDIT, c);
+        ctx.colIndexMap.putIfAbsent(TimetableConstants.HEADER_CREDIT, c);
       }
     }
-    log.info("(mapCoreColumns) Mapped core columns: {}", colIndexMap);
   }
 
-  private void mapWeekColumnsByNumber(Sheet sheet, int headerRowIndex) {
+  private void mapWeekColumnsByNumber(Sheet sheet, int headerRowIndex, SheetParseContext ctx) {
     int startScan = Math.max(0, headerRowIndex - 4);
     int endScan = Math.min(sheet.getLastRowNum(), headerRowIndex + 4);
 
+    // Chiến lược 1: Tìm hàng có số tuần 1, 2, 3 liên tiếp
     for (int r = startScan; r <= endScan; r++) {
       Row row = sheet.getRow(r);
-      if (row == null) continue;
+      if (row == null) {
+        continue;
+      }
 
       for (int c = 0; c < row.getLastCellNum() - 2; c++) {
         Integer val1 = getCellValueAsInteger(row.getCell(c));
@@ -129,94 +140,160 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
           while (col < row.getLastCellNum()) {
             Integer weekVal = getCellValueAsInteger(row.getCell(col));
             if (weekVal != null && weekVal == week) {
-              weekToColMap.put(week, col);
+              ctx.weekToColMap.put(week, col);
               week++;
               col++;
             } else {
               break;
             }
           }
-          log.info("(mapWeekColumnsByNumber) Found {} study weeks at line {} (index={})", weekToColMap.size(), r + 1, r);
+          log.info("(mapWeekColumnsByNumber) [Strategy 1] Found {} weeks by 1..N numbers",
+              ctx.weekToColMap.size());
           return;
         }
       }
     }
+
+    // Chiến lược 2 (Dự phòng cho file không có số tuần): Quét hàng chứa "Ngày BĐ"
+    for (int r = startScan; r <= endScan; r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+
+      for (int c = 0; c < row.getLastCellNum(); c++) {
+        String cellText = normalize(getCellValueAsString(row.getCell(c)));
+        if (cellText.contains("ngaybd") || cellText.contains("ngaybatdau")) {
+          int week = 1;
+          int col = c + 1; // Các cột tiếp theo là ngày bắt đầu của Tuần 1, Tuần 2...
+          while (col < row.getLastCellNum()) {
+            Integer dayVal = getCellValueAsInteger(row.getCell(col));
+            if (dayVal != null && dayVal >= 1 && dayVal <= 31) {
+              ctx.weekToColMap.put(week, col);
+              week++;
+              col++;
+            } else {
+              break;
+            }
+          }
+          log.info("(mapWeekColumnsByNumber) [Strategy 2] Found {} weeks by 'Ngày BĐ' row",
+              ctx.weekToColMap.size());
+          return;
+        }
+      }
+    }
+
+    log.warn("(mapWeekColumnsByNumber) Could not detect study weeks using any strategy!");
   }
 
-  private void determineDataStartRow(Sheet sheet, int headerRowIndex) {
-    this.dataStartRow = headerRowIndex + 1;
-    int dayCol = colIndexMap.getOrDefault(TimetableConstants.HEADER_DAY, 9);
-    while (this.dataStartRow <= sheet.getLastRowNum()) {
-      Row r = sheet.getRow(this.dataStartRow);
+  private void determineDataStartRow(Sheet sheet, int headerRowIndex, SheetParseContext ctx) {
+    ctx.dataStartRow = headerRowIndex + 1;
+    int dayCol = ctx.colIndexMap.getOrDefault(TimetableConstants.HEADER_DAY, 9);
+    while (ctx.dataStartRow <= sheet.getLastRowNum()) {
+      Row r = sheet.getRow(ctx.dataStartRow);
       if (r != null) {
         Integer dayVal = getCellValueAsInteger(r.getCell(dayCol));
         if (dayVal != null && dayVal >= 2 && dayVal <= 8) {
           break;
         }
       }
-      this.dataStartRow++;
+      ctx.dataStartRow++;
     }
-    log.info("(determineDataStartRow) Timetable data starts at line {} (index={})", this.dataStartRow + 1, this.dataStartRow);
+  }
+
+  private void extractDetectedStartDate(Sheet sheet, SheetParseContext ctx) {
+    Integer week1Col = ctx.weekToColMap.get(1);
+    if (week1Col == null) {
+      return;
+    }
+
+    try {
+      Row monthRow = sheet.getRow(6); // Dòng 7 index 6: Tháng (08/26)
+      Row dayRow = sheet.getRow(7);   // Dòng 8 index 7: Ngày BĐ (10)
+      if (monthRow == null || dayRow == null) {
+        return;
+      }
+
+      String monthStr = getCellValueAsString(monthRow.getCell(week1Col));
+      Integer dayVal = getCellValueAsInteger(dayRow.getCell(week1Col));
+
+      if (monthStr != null && monthStr.contains("/") && dayVal != null) {
+        String[] parts = monthStr.trim().split("/");
+        int month = Integer.parseInt(parts[0]);
+        int year = 2000 + Integer.parseInt(parts[1]);
+        ctx.detectedStartDate = LocalDate.of(year, month, dayVal);
+        log.info("(extractDetectedStartDate) Detected Week 1 start date from Excel: {}",
+            ctx.detectedStartDate);
+      }
+    } catch (Exception e) {
+      log.warn("(extractDetectedStartDate) Could not parse Week 1 date from Excel header: {}",
+          e.getMessage());
+    }
   }
 
   @Override
   public int getDataStartRow() {
-    return this.dataStartRow;
+    return currentContext.get().dataStartRow;
   }
 
   @Override
   public int getHeaderRowIndex() {
-    return this.headerRowIndex;
+    return currentContext.get().headerRowIndex;
   }
 
   @Override
   public int getDetectedWeeksCount() {
-    return this.weekToColMap.size();
+    return currentContext.get().weekToColMap.size();
   }
 
   @Override
   public int getMappedColumnsCount() {
-    return this.colIndexMap.size();
+    return currentContext.get().colIndexMap.size();
   }
 
   @Override
   public MasterTimetableRowDto adapt(Row row, int rowNumber, List<ImportRowError> errors) {
+    SheetParseContext ctx = currentContext.get();
     try {
-      int dayCol = colIndexMap.getOrDefault(TimetableConstants.HEADER_DAY, -1);
+      int dayCol = ctx.colIndexMap.getOrDefault(TimetableConstants.HEADER_DAY, -1);
       Integer dayOfWeek = dayCol != -1 ? getCellValueAsInteger(row.getCell(dayCol)) : null;
       if (dayOfWeek == null || dayOfWeek < 2 || dayOfWeek > 8) {
         return null;
       }
 
-      String subjectCode = getVal(row, TimetableConstants.HEADER_SUBJECT_CODE);
-      String groupNumber = getVal(row, TimetableConstants.HEADER_GROUP);
-      String practiceGroup = getVal(row, TimetableConstants.HEADER_PRACTICE);
-      Integer startPeriod = getInt(row, TimetableConstants.HEADER_START_PERIOD);
-      Integer numPeriods = getInt(row, TimetableConstants.HEADER_NUM_PERIODS);
-      String roomText = getVal(row, TimetableConstants.HEADER_ROOM);
+      String subjectCode = getVal(row, TimetableConstants.HEADER_SUBJECT_CODE, ctx);
+      String groupNumber = getVal(row, TimetableConstants.HEADER_GROUP, ctx);
+      String practiceGroup = getVal(row, TimetableConstants.HEADER_PRACTICE, ctx);
+      Integer startPeriod = getInt(row, TimetableConstants.HEADER_START_PERIOD, ctx);
+      Integer numPeriods = getInt(row, TimetableConstants.HEADER_NUM_PERIODS, ctx);
+      String roomText = getVal(row, TimetableConstants.HEADER_ROOM, ctx);
 
-      Set<Integer> activeWeeks = extractActiveWeeks(row);
+      Set<Integer> activeWeeks = extractActiveWeeks(row, ctx);
       boolean isOnline = TimetableConstants.KEYWORD_ONLINE_EN.equalsIgnoreCase(
           roomText != null ? roomText.trim() : "");
+
+      // Tính giờ tròn qua PeriodTimeCalculator
+      LocalTime startTime = periodTimeCalculator.calculateStartTime(startPeriod);
+      LocalTime endTime = periodTimeCalculator.calculateEndTime(startPeriod, numPeriods);
 
       return MasterTimetableRowDto.builder()
           .rowNumber(rowNumber)
           .subjectCode(subjectCode)
-          .subjectName(getVal(row, TimetableConstants.HEADER_SUBJECT_NAME))
-          .cohort(getVal(row, TimetableConstants.HEADER_COHORT))
+          .subjectName(getVal(row, TimetableConstants.HEADER_SUBJECT_NAME, ctx))
+          .cohort(getVal(row, TimetableConstants.HEADER_COHORT, ctx))
           .classCode(generateClassCode(subjectCode, groupNumber, practiceGroup))
           .groupNumber(groupNumber)
           .practiceGroup(practiceGroup)
-          .managementClass(getVal(row, TimetableConstants.HEADER_MANAGEMENT_CLASS))
-          .lecturerName(getVal(row, TimetableConstants.HEADER_LECTURER))
+          .managementClass(getVal(row, TimetableConstants.HEADER_MANAGEMENT_CLASS, ctx))
+          .lecturerName(getVal(row, TimetableConstants.HEADER_LECTURER, ctx))
           .dayOfWeek(dayOfWeek)
           .startPeriod(startPeriod)
           .numPeriods(numPeriods)
-          .startTime(calculateStartTime(startPeriod))
-          .endTime(calculateEndTime(startPeriod, numPeriods))
+          .startTime(startTime)
+          .endTime(endTime)
           .roomText(roomText)
-          .building(getVal(row, TimetableConstants.HEADER_BUILDING))
-          .credit(getInt(row, TimetableConstants.HEADER_CREDIT))
+          .building(getVal(row, TimetableConstants.HEADER_BUILDING, ctx))
+          .credit(getInt(row, TimetableConstants.HEADER_CREDIT, ctx))
           .activeWeeks(activeWeeks)
           .isOnline(isOnline)
           .build();
@@ -226,9 +303,9 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     }
   }
 
-  private Set<Integer> extractActiveWeeks(Row row) {
+  private Set<Integer> extractActiveWeeks(Row row, SheetParseContext ctx) {
     Set<Integer> activeWeeks = new TreeSet<>();
-    for (Map.Entry<Integer, Integer> entry : weekToColMap.entrySet()) {
+    for (Map.Entry<Integer, Integer> entry : ctx.weekToColMap.entrySet()) {
       int weekNum = entry.getKey();
       int colIdx = entry.getValue();
       String val = getCellValueAsString(row.getCell(colIdx));
@@ -245,23 +322,29 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
       return false;
     }
     if (data.getSubjectCode() == null || data.getSubjectCode().isBlank()) {
-      errors.add(new ImportRowError(rowNumber, "Subject code cannot be blank"));
+      errors.add(new ImportRowError(rowNumber, "Mã môn học không được để trống"));
       return false;
     }
     if (data.getActiveWeeks() == null || data.getActiveWeeks().isEmpty()) {
-      errors.add(new ImportRowError(rowNumber, "No active weeks marked with 'x'"));
+      errors.add(new ImportRowError(rowNumber, "Không có tuần học nào được đánh dấu 'x'"));
+      return false;
+    }
+    try {
+      periodTimeCalculator.validatePeriodRange(data.getStartPeriod(), data.getNumPeriods());
+    } catch (BusinessException be) {
+      errors.add(new ImportRowError(rowNumber, be.getMessage()));
       return false;
     }
     return true;
   }
 
-  private String getVal(Row row, String key) {
-    int col = colIndexMap.getOrDefault(key, -1);
+  private String getVal(Row row, String key, SheetParseContext ctx) {
+    int col = ctx.colIndexMap.getOrDefault(key, -1);
     return col != -1 ? getCellValueAsString(row.getCell(col)) : null;
   }
 
-  private Integer getInt(Row row, String key) {
-    int col = colIndexMap.getOrDefault(key, -1);
+  private Integer getInt(Row row, String key, SheetParseContext ctx) {
+    int col = ctx.colIndexMap.getOrDefault(key, -1);
     return col != -1 ? getCellValueAsInteger(row.getCell(col)) : null;
   }
 
@@ -275,8 +358,6 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     }
     return sb.toString();
   }
-
-  private static final DataFormatter DATA_FORMATTER = new DataFormatter();
 
   private String normalize(String text) {
     if (text == null) {
@@ -314,31 +395,13 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     return null;
   }
 
-  private LocalTime calculateStartTime(Integer startPeriod) {
-    if (startPeriod == null) {
-      return LocalTime.of(7, 0);
-    }
-    return switch (startPeriod) {
-      case 1 -> LocalTime.of(7, 0);
-      case 2 -> LocalTime.of(7, 50);
-      case 3 -> LocalTime.of(8, 50);
-      case 4 -> LocalTime.of(9, 40);
-      case 5 -> LocalTime.of(10, 30);
-      case 6 -> LocalTime.of(11, 20);
-      case 7 -> LocalTime.of(12, 30);
-      case 8 -> LocalTime.of(13, 20);
-      case 9 -> LocalTime.of(14, 20);
-      case 10 -> LocalTime.of(15, 10);
-      case 11 -> LocalTime.of(16, 0);
-      case 12 -> LocalTime.of(16, 50);
-      default -> LocalTime.of(7, 0);
-    };
-  }
+  // Context lưu cấu hình cột theo từng sheet để đảm bảo Thread-safe cho Spring Singleton
+  public static class SheetParseContext {
 
-  private LocalTime calculateEndTime(Integer startPeriod, Integer numPeriods) {
-    if (startPeriod == null || numPeriods == null) {
-      return LocalTime.of(9, 25);
-    }
-    return calculateStartTime(startPeriod).plusMinutes((long) numPeriods * 50);
+    public final Map<String, Integer> colIndexMap = new HashMap<>();
+    public final Map<Integer, Integer> weekToColMap = new HashMap<>();
+    public int dataStartRow = 12;
+    public int headerRowIndex = 6;
+    public LocalDate detectedStartDate = null;
   }
 }

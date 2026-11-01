@@ -7,6 +7,8 @@ public interface FileStorageService {
 
   String storeFile(MultipartFile file, String moduleName);
 
+  String storeFile(MultipartFile file, String moduleName, String customPrefix);
+
   Resource loadFileAsResource(String relativePath);
 
   void deleteFile(String relativePath);
