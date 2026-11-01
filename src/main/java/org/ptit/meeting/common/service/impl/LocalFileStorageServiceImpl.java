@@ -25,6 +25,11 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
 
   @Override
   public String storeFile(MultipartFile file, String moduleName) {
+    return storeFile(file, moduleName, null);
+  }
+
+  @Override
+  public String storeFile(MultipartFile file, String moduleName, String customPrefix) {
     validateFile(file, moduleName);
 
     FileStorageProperties.ModuleUploadRule rule = properties.getRule(moduleName);
@@ -37,10 +42,18 @@ public class LocalFileStorageServiceImpl implements FileStorageService {
     try {
       Files.createDirectories(uploadPath);
       String ext = getFileExtension(file.getOriginalFilename());
-      String uniqueFilename =
-          System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
-      Path targetLocation = uploadPath.resolve(uniqueFilename);
 
+      // Tạo tên file theo tiền tố custom: ddmmyy_TKB_HK1_2026-2027_xxxxxx.xlsx
+      String uniqueFilename;
+      if (customPrefix != null && !customPrefix.isBlank()) {
+        String safePrefix = customPrefix.trim().replaceAll("[^a-zA-Z0-9_.-]", "_");
+        uniqueFilename = safePrefix + "_" + UUID.randomUUID().toString().substring(0, 6) + ext;
+      } else {
+        uniqueFilename =
+            System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
+      }
+
+      Path targetLocation = uploadPath.resolve(uniqueFilename);
       Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
       return subDir.isEmpty() ? uniqueFilename : (subDir + "/" + uniqueFilename);
     } catch (IOException ex) {

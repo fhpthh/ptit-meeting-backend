@@ -1,11 +1,16 @@
 package org.ptit.meeting.modules.timetable.facade.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.*;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.ptit.meeting.common.service.FileStorageService;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.timetable.adapter.ExcelAdapterFactory;
@@ -15,15 +20,14 @@ import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportType;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
+import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
 import org.ptit.meeting.modules.timetable.dto.response.ImportResultResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
-import java.time.LocalDateTime;
-import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
-import org.ptit.meeting.modules.timetable.entity.Semester;
-import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.entity.ImportHistory;
+import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.facade.TimetableAdminFacade;
 import org.ptit.meeting.modules.timetable.repository.ImportHistoryRepository;
+import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.service.TimetableService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,33 +45,49 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   private final ObjectMapper objectMapper;
 
   @Override
-  public ImportResultResponse importMasterTimetable(Long semesterId, MultipartFile file, Long uploadedBy) {
+  public ImportResultResponse importMasterTimetable(Long semesterId, MultipartFile file,
+      Long uploadedBy) {
     // 1. Kiểm tra học kỳ tồn tại (Fail fast)
     Semester semester = semesterRepository.findById(semesterId)
-        .orElseThrow(() -> BusinessException.notExisted(TimetableErrorConstants.SEMESTER_NOT_FOUND));
+        .orElseThrow(
+            () -> BusinessException.notExisted(TimetableErrorConstants.SEMESTER_NOT_FOUND));
 
     // 2. Kiểm tra tiến trình import trùng lặp trong cùng học kỳ
     checkConcurrentImport(semesterId);
 
     // 3. Lưu file vật lý đối soát
-    String filePath = fileStorageService.storeFile(file, TimetableConstants.MODULE_NAME);
+    String dateStr = java.time.LocalDate.now()
+        .format(java.time.format.DateTimeFormatter.ofPattern("ddMMyy"));
+    String customPrefix = String.format("%s_TKB_HK%d_%s",
+        dateStr,
+        semester.getSemesterNum(),
+        semester.getAcademicYear());
+
+    String filePath = fileStorageService.storeFile(
+        file,
+        TimetableConstants.MODULE_NAME,
+        customPrefix);
 
     // 4. Khởi tạo bản ghi lịch sử
-    ImportHistory history = initHistory(semesterId, uploadedBy, file.getOriginalFilename(), filePath);
+    ImportHistory history = initHistory(semesterId, uploadedBy, file.getOriginalFilename(),
+        filePath);
 
     List<ImportRowError> errors = new ArrayList<>();
     try {
       // 5. Mở file và dùng Adapter đọc dữ liệu
-      ExcelImportAdapter<MasterTimetableRowDto> adapter = adapterFactory.getAdapter(ImportType.MASTER_TIMETABLE);
+      ExcelImportAdapter<MasterTimetableRowDto> adapter = adapterFactory.getAdapter(
+          ImportType.MASTER_TIMETABLE);
       List<MasterTimetableRowDto> validRows = parseExcel(file, adapter, errors);
 
       // 6. Bàn giao danh sách sạch cho TimetableService lưu CSDL
-      TimetableProcessResult result = timetableService.processMasterTimetable(semesterId, validRows, errors);
+      TimetableProcessResult result = timetableService.processMasterTimetable(semesterId, validRows,
+          errors);
 
       // 7. Cập nhật kết quả cuối cùng
       int totalExcelDataRows = validRows.size() + errors.size();
       int failedCount = totalExcelDataRows - result.getSuccessCount();
-      updateHistorySuccess(history, totalExcelDataRows, result.getSuccessCount(), failedCount, errors);
+      updateHistorySuccess(history, totalExcelDataRows, result.getSuccessCount(), failedCount,
+          errors);
 
       ImportResultResponse.ImportStatistics statistics = ImportResultResponse.ImportStatistics.builder()
           .headerRow(adapter.getHeaderRowIndex() + 1)
@@ -93,7 +113,7 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
           .successRows(result.getSuccessCount())
           .failureRows(failedCount)
           .statistics(statistics)
-          .errors(errors)
+          .errors(failedCount == 0 ? null : errors)
           .completedAt(LocalDateTime.now())
           .build();
 
@@ -105,14 +125,19 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   }
 
   private void checkConcurrentImport(Long semesterId) {
-    historyRepository.findFirstBySemesterIdAndStatusOrderByCreatedAtDesc(semesterId, ImportStatus.PROCESSING)
+    historyRepository.findFirstBySemesterIdAndStatusOrderByCreatedAtDesc(semesterId,
+            ImportStatus.PROCESSING)
         .ifPresent(h -> {
           // If previous import job has been running for more than 3 minutes (usually due to crash/restart mid-process)
-          if (h.getCreatedAt() != null && h.getCreatedAt().isBefore(java.time.LocalDateTime.now().minusMinutes(3))) {
-            log.warn("(checkConcurrentImport) Found stale import job id={} running for more than 3 minutes, automatically marking as FAILED", h.getId());
+          if (h.getCreatedAt() != null && h.getCreatedAt()
+              .isBefore(java.time.LocalDateTime.now().minusMinutes(3))) {
+            log.warn(
+                "(checkConcurrentImport) Found stale import job id={} running for more than 3 minutes, automatically marking as FAILED",
+                h.getId());
             h.setStatus(ImportStatus.FAILED);
             try {
-              h.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("reason", "Import process timed out or interrupted due to server restart")));
+              h.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("reason",
+                  "Import process timed out or interrupted due to server restart")));
             } catch (Exception ignored) {
               h.setErrorLog("{\"reason\": \"Import process interrupted\"}");
             }
@@ -123,7 +148,8 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
         });
   }
 
-  private ImportHistory initHistory(Long semesterId, Long uploadedBy, String fileName, String filePath) {
+  private ImportHistory initHistory(Long semesterId, Long uploadedBy, String fileName,
+      String filePath) {
     return historyRepository.save(
         ImportHistory.builder()
             .semesterId(semesterId)
@@ -151,7 +177,9 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
       int startRow = adapter.getDataStartRow();
       for (int i = startRow; i <= sheet.getLastRowNum(); i++) {
         Row row = sheet.getRow(i);
-        if (row == null) continue;
+        if (row == null) {
+          continue;
+        }
         int rowNumber = i + 1;
 
         MasterTimetableRowDto dto = adapter.adapt(row, rowNumber, errors);
@@ -169,7 +197,8 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
     return validRows;
   }
 
-  private void updateHistorySuccess(ImportHistory history, int total, int success, int failed, List<ImportRowError> errors) {
+  private void updateHistorySuccess(ImportHistory history, int total, int success, int failed,
+      List<ImportRowError> errors) {
     history.setTotalRows(total);
     history.setSuccessRows(success);
     history.setFailedRows(failed);
@@ -186,7 +215,8 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   private void updateHistoryFailed(ImportHistory history, String error) {
     history.setStatus(ImportStatus.FAILED);
     try {
-      history.setErrorLog(objectMapper.writeValueAsString(java.util.Map.of("error", error != null ? error : "Unknown error")));
+      history.setErrorLog(objectMapper.writeValueAsString(
+          java.util.Map.of("error", error != null ? error : "Unknown error")));
     } catch (Exception e) {
       log.warn("(updateHistoryFailed) Error serializing error_log to JSON", e);
       history.setErrorLog("{\"error\": \"Unknown system error\"}");
@@ -195,7 +225,9 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   }
 
   private String formatFileSize(long bytes) {
-    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024) {
+      return bytes + " B";
+    }
     int exp = (int) (Math.log(bytes) / Math.log(1024));
     char pre = "KMGTPE".charAt(exp - 1);
     return String.format("%.2f %sB", bytes / Math.pow(1024, exp), pre);

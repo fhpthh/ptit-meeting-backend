@@ -122,6 +122,7 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
     int startScan = Math.max(0, headerRowIndex - 4);
     int endScan = Math.min(sheet.getLastRowNum(), headerRowIndex + 4);
 
+    // Chiến lược 1: Tìm hàng có số tuần 1, 2, 3 liên tiếp
     for (int r = startScan; r <= endScan; r++) {
       Row row = sheet.getRow(r);
       if (row == null) {
@@ -146,10 +147,43 @@ public class MasterTimetableExcelAdapter implements ExcelImportAdapter<MasterTim
               break;
             }
           }
+          log.info("(mapWeekColumnsByNumber) [Strategy 1] Found {} weeks by 1..N numbers",
+              ctx.weekToColMap.size());
           return;
         }
       }
     }
+
+    // Chiến lược 2 (Dự phòng cho file không có số tuần): Quét hàng chứa "Ngày BĐ"
+    for (int r = startScan; r <= endScan; r++) {
+      Row row = sheet.getRow(r);
+      if (row == null) {
+        continue;
+      }
+
+      for (int c = 0; c < row.getLastCellNum(); c++) {
+        String cellText = normalize(getCellValueAsString(row.getCell(c)));
+        if (cellText.contains("ngaybd") || cellText.contains("ngaybatdau")) {
+          int week = 1;
+          int col = c + 1; // Các cột tiếp theo là ngày bắt đầu của Tuần 1, Tuần 2...
+          while (col < row.getLastCellNum()) {
+            Integer dayVal = getCellValueAsInteger(row.getCell(col));
+            if (dayVal != null && dayVal >= 1 && dayVal <= 31) {
+              ctx.weekToColMap.put(week, col);
+              week++;
+              col++;
+            } else {
+              break;
+            }
+          }
+          log.info("(mapWeekColumnsByNumber) [Strategy 2] Found {} weeks by 'Ngày BĐ' row",
+              ctx.weekToColMap.size());
+          return;
+        }
+      }
+    }
+
+    log.warn("(mapWeekColumnsByNumber) Could not detect study weeks using any strategy!");
   }
 
   private void determineDataStartRow(Sheet sheet, int headerRowIndex, SheetParseContext ctx) {
