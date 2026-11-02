@@ -1,4 +1,3 @@
-
 package org.ptit.meeting.modules.auth.service.impl;
 
 import lombok.RequiredArgsConstructor;
@@ -9,6 +8,7 @@ import org.ptit.meeting.modules.auth.client.MicrosoftGraphClient;
 import org.ptit.meeting.modules.auth.constant.AuthErrorConstants;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
 import org.ptit.meeting.modules.auth.service.MicrosoftAuthService;
+import org.ptit.meeting.utils.PtitAccountUtils;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -22,7 +22,8 @@ public class MicrosoftAuthServiceImpl implements MicrosoftAuthService {
   private final MicrosoftGraphClient microsoftGraphClient;
 
   @Override
-  public MicrosoftGraphClient.MicrosoftUserProfile authenticateAndFetchProfile(String code, String redirectUri) {
+  public MicrosoftGraphClient.MicrosoftUserProfile authenticateAndFetchProfile(String code,
+      String redirectUri) {
     log.info("(authenticateAndFetchProfile) Exchanging code for redirectUri: {}", redirectUri);
     return microsoftGraphClient.authenticateAndFetchProfile(code, redirectUri);
   }
@@ -43,10 +44,12 @@ public class MicrosoftAuthServiceImpl implements MicrosoftAuthService {
   public String extractStudentCode(String email, AccountType accountType) {
     if (AccountType.STUDENT.equals(accountType) && email.contains("@")) {
       String localPart = email.substring(0, email.indexOf('@')).toUpperCase();
+      String rawCode = localPart;
       if (localPart.contains(".")) {
-        return localPart.substring(localPart.lastIndexOf('.') + 1);
+        rawCode = localPart.substring(localPart.lastIndexOf('.') + 1);
       }
-      return localPart;
+      // Khôi phục chữ "DC" bị lược bỏ trong email PTIT: B22CN356 -> B22DCCN356
+      return PtitAccountUtils.normalizeToFullStudentCode(rawCode);
     }
     return null;
   }
@@ -62,8 +65,10 @@ public class MicrosoftAuthServiceImpl implements MicrosoftAuthService {
     }
 
     if (candidate == null) {
-      log.error("(resolveEmail) Both email and userPrincipalName are missing for oid: {}", profile.oid());
-      throw new BusinessException(StatusCode.AUTHORIZATION_FAILED, AuthErrorConstants.INVALID_DOMAIN);
+      log.error("(resolveEmail) Both email and userPrincipalName are missing for oid: {}",
+          profile.oid());
+      throw new BusinessException(StatusCode.AUTHORIZATION_FAILED,
+          AuthErrorConstants.INVALID_DOMAIN);
     }
 
     // Xử lý tài khoản khách mời / guest external account trên Azure AD
@@ -75,10 +80,12 @@ public class MicrosoftAuthServiceImpl implements MicrosoftAuthService {
       } else {
         int lastUnderscore = beforeExt.lastIndexOf('_');
         if (lastUnderscore > 0) {
-          candidate = beforeExt.substring(0, lastUnderscore) + "@" + beforeExt.substring(lastUnderscore + 1);
+          candidate = beforeExt.substring(0, lastUnderscore) + "@" + beforeExt.substring(
+              lastUnderscore + 1);
         }
       }
-      log.info("(resolveEmail) Resolved Azure AD external guest account to original email: {}", candidate);
+      log.info("(resolveEmail) Resolved Azure AD external guest account to original email: {}",
+          candidate);
     }
 
     return candidate;

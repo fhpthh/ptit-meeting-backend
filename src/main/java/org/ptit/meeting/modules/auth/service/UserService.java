@@ -19,4 +19,6 @@ public interface UserService {
   void enrichAuthorities(User user);
 
   User syncUserProfile(User user, String fullName, String code);
+
+  User findOrCreateStudent(String studentCode, String fullName, String department, String email);
 }
