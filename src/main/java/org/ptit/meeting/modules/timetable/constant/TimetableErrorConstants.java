@@ -10,6 +10,13 @@ public class TimetableErrorConstants {
   public static final String LECTURER_CONFLICT = "error.timetable.conflict.lecturer";
   public static final String WEEK_INVALID = "error.timetable.week.invalid";
   public static final String LECTURER_SEMESTER_ACCESS_DENIED = "error.timetable.lecturer.semester-access-denied";
+  public static final String SEMESTER_DATE_INVALID =
+      "error.timetable.semester.date-invalid";
+  public static final String ACTIVE_SEMESTER_NOT_FOUND =
+      "error.timetable.semester.active-not-found";
+  public static final String SEMESTER_CODE_EXISTED = "error.timetable.semester.code-existed";
+  public static final String SEMESTER_START_DATE_NOT_MONDAY = "error.timetable.semester.start-date-not-monday";
+
   private TimetableErrorConstants() {
   }
 

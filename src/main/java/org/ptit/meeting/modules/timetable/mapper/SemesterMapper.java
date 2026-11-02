@@ -1,4 +1,4 @@
-package org.ptit.meeting.modules.mapper;
+package org.ptit.meeting.modules.timetable.mapper;
 
 import org.ptit.meeting.modules.timetable.dto.response.SemesterResponse;
 import org.ptit.meeting.modules.timetable.entity.Semester;
