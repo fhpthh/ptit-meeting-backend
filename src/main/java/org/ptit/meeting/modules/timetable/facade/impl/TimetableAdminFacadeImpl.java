@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Row;
@@ -68,10 +69,16 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
         TimetableConstants.MODULE_NAME,
         customPrefix);
 
-    // 4. Khởi tạo bản ghi lịch sử
-    ImportHistory history = initHistory(semesterId, uploadedBy, file.getOriginalFilename(),
-        filePath);
-
+    // Bổ sung try-catch xóa bù nếu lưu DB thất bại
+    ImportHistory history;
+    try {
+      history = initHistory(semesterId, uploadedBy, file.getOriginalFilename(), filePath);
+    } catch (Exception ex) {
+      log.error("(importMasterTimetable) DB error creating ImportHistory, deleting orphan file: {}",
+          filePath, ex);
+      fileStorageService.deleteFile(filePath);
+      throw ex;
+    }
     List<ImportRowError> errors = new ArrayList<>();
     try {
       // 5. Mở file và dùng Adapter đọc dữ liệu
@@ -216,10 +223,11 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
     history.setStatus(ImportStatus.FAILED);
     try {
       history.setErrorLog(objectMapper.writeValueAsString(
-          java.util.Map.of("error", error != null ? error : "Unknown error")));
+          Map.of("reason", error != null ? error : "Unknown system error")
+      ));
     } catch (Exception e) {
       log.warn("(updateHistoryFailed) Error serializing error_log to JSON", e);
-      history.setErrorLog("{\"error\": \"Unknown system error\"}");
+      history.setErrorLog("{\"reason\": \"Unknown system error\"}");
     }
     historyRepository.save(history);
   }
