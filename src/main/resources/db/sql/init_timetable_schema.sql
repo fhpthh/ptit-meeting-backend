@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS import_histories (
     error_log    JSON         NULL,
     created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_imp_created (created_at DESC),
+    INDEX idx_imp_filter (semester_id, status, created_at DESC),
     CONSTRAINT fk_imp_semester FOREIGN KEY (semester_id) REFERENCES semesters(id) ON DELETE CASCADE,
     CONSTRAINT fk_imp_user     FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
