@@ -9,6 +9,8 @@ import org.ptit.meeting.modules.timetable.dto.request.SemesterSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterUpdateRequest;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterResponse;
 import org.ptit.meeting.modules.timetable.service.SemesterAdminService;
+import org.ptit.meeting.utils.MessageUtil;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class SemesterAdminController {
 
+  private static final String DELETE_SUCCESS_MESSAGE = "timetable.semester.delete.success";
+
   private final SemesterAdminService semesterAdminService;
+  private final MessageUtil messageUtil;
 
   @PostMapping
   public BaseResponse<SemesterResponse> create(
@@ -53,6 +58,12 @@ public class SemesterAdminController {
   @GetMapping("/active")
   public BaseResponse<SemesterResponse> getActive() {
     return BaseResponse.success(semesterAdminService.getActive());
+  }
+
+  @DeleteMapping("/{id}")
+  public BaseResponse<Void> delete(@PathVariable Long id) {
+    semesterAdminService.delete(id);
+    return BaseResponse.success(messageUtil.getMessage(DELETE_SUCCESS_MESSAGE));
   }
 
   @GetMapping

@@ -2,7 +2,11 @@ package org.ptit.meeting.modules.timetable.service.impl;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.modules.timetable.mapper.SemesterMapper;
@@ -18,7 +22,10 @@ import org.ptit.meeting.modules.timetable.dto.request.SemesterCreateRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterUpdateRequest;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterResponse;
+import org.ptit.meeting.modules.timetable.dto.internal.SemesterClassSectionCountRow;
 import org.ptit.meeting.modules.timetable.entity.Semester;
+import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
+import org.ptit.meeting.modules.timetable.repository.ImportHistoryRepository;
 import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.service.ScheduleDateCalculator;
 import org.ptit.meeting.modules.timetable.service.SemesterAdminService;
@@ -29,6 +36,8 @@ import org.ptit.meeting.modules.timetable.service.SemesterAdminService;
 public class SemesterAdminServiceImpl implements SemesterAdminService {
 
   private final SemesterRepository semesterRepository;
+  private final ClassSectionRepository classSectionRepository;
+  private final ImportHistoryRepository importHistoryRepository;
   private final SemesterMapper semesterMapper;
   private final ScheduleDateCalculator scheduleDateCalculator;
 
@@ -62,7 +71,7 @@ public class SemesterAdminServiceImpl implements SemesterAdminService {
       semester = activateLocked(semester.getId());
     }
 
-    return toResponse(semester);
+    return toResponse(semester, 0L);
   }
 
   @Override
@@ -121,6 +130,31 @@ public class SemesterAdminServiceImpl implements SemesterAdminService {
   }
 
   @Override
+  @Transactional
+  public void delete(Long id) {
+    Semester semester = getEntity(id);
+
+    if (semester.isActive()) {
+      throw BusinessException.invalidInput(
+          TimetableErrorConstants.SEMESTER_ACTIVE_DELETE_FORBIDDEN,
+          id
+      );
+    }
+
+    boolean hasRelatedData = classSectionRepository.existsBySemesterId(id)
+        || importHistoryRepository.existsBySemesterId(id);
+
+    if (hasRelatedData) {
+      throw BusinessException.invalidInput(
+          TimetableErrorConstants.SEMESTER_HAS_RELATED_DATA,
+          id
+      );
+    }
+
+    semesterRepository.delete(semester);
+  }
+
+  @Override
   @Transactional(readOnly = true)
   public PageResponseDTO<SemesterResponse> search(SemesterSearchRequest request) {
     if (request == null) {
@@ -138,9 +172,12 @@ public class SemesterAdminServiceImpl implements SemesterAdminService {
         Sort.by(direction, normalizeSortField(request.getSortBy()))
     );
 
-    Page<SemesterResponse> page = semesterRepository
-        .search(keyword, academicYear, pageable)
-        .map(this::toResponse);
+    Page<Semester> semesterPage = semesterRepository.search(keyword, academicYear, pageable);
+    Map<Long, Long> classSectionCounts = getClassSectionCounts(semesterPage.getContent());
+
+    Page<SemesterResponse> page = semesterPage.map(semester ->
+        toResponse(semester, classSectionCounts.getOrDefault(semester.getId(), 0L))
+    );
 
     return PageResponseDTO.from(page);
   }
@@ -173,12 +210,38 @@ public class SemesterAdminServiceImpl implements SemesterAdminService {
   }
 
   private SemesterResponse toResponse(Semester semester) {
+    long classSectionCount = classSectionRepository.countBySemesterIds(Set.of(semester.getId()))
+        .stream()
+        .findFirst()
+        .map(SemesterClassSectionCountRow::classSectionCount)
+        .orElse(0L);
+
+    return toResponse(semester, classSectionCount);
+  }
+
+  private SemesterResponse toResponse(Semester semester, long classSectionCount) {
     long totalWeeks = scheduleDateCalculator.calculateTotalWeeks(
         semester.getStartDate(),
         semester.getEndDate()
     );
 
-    return semesterMapper.toResponse(semester, totalWeeks);
+    return semesterMapper.toResponse(semester, totalWeeks, classSectionCount);
+  }
+
+  private Map<Long, Long> getClassSectionCounts(List<Semester> semesters) {
+    if (semesters.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Set<Long> semesterIds = semesters.stream()
+        .map(Semester::getId)
+        .collect(Collectors.toSet());
+
+    return classSectionRepository.countBySemesterIds(semesterIds).stream()
+        .collect(Collectors.toMap(
+            SemesterClassSectionCountRow::semesterId,
+            SemesterClassSectionCountRow::classSectionCount
+        ));
   }
 
   private void validateDates(LocalDate startDate, LocalDate endDate) {

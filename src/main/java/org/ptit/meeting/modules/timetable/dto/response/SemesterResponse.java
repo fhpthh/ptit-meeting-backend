@@ -13,6 +13,7 @@ public record SemesterResponse(
     LocalDate endDate,
     boolean isActive,
     long totalWeeks,
+    long classSectionCount,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {

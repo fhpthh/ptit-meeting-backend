@@ -15,6 +15,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ImportHistoryRepository extends JpaRepository<ImportHistory, Long> {
 
+  boolean existsBySemesterId(Long semesterId);
+
   List<ImportHistory> findAllBySemesterIdOrderByCreatedAtDesc(Long semesterId);
 
   List<ImportHistory> findAllByUploadedByOrderByCreatedAtDesc(Long uploadedBy);

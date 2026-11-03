@@ -18,5 +18,7 @@ public interface SemesterAdminService {
 
   SemesterResponse getActive();
 
+  void delete(Long id);
+
   PageResponseDTO<SemesterResponse> search(SemesterSearchRequest request);
 }

@@ -7,7 +7,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class SemesterMapper {
 
-  public SemesterResponse toResponse(Semester semester, long totalWeeks) {
+  public SemesterResponse toResponse(
+      Semester semester,
+      long totalWeeks,
+      long classSectionCount
+  ) {
     return new SemesterResponse(
         semester.getId(),
         semester.getCode(),
@@ -18,6 +22,7 @@ public class SemesterMapper {
         semester.getEndDate(),
         semester.isActive(),
         totalWeeks,
+        classSectionCount,
         semester.getCreatedAt(),
         semester.getUpdatedAt()
     );
