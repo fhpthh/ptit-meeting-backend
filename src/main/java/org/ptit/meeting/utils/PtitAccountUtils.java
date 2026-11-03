@@ -14,9 +14,9 @@ public final class PtitAccountUtils {
   // Domain email sinh viên Microsoft 365 chính thức của PTIT
   public static final String STUDENT_EMAIL_DOMAIN = "@stu.ptit.edu.vn";
 
-  // Regex nhận diện mã sinh viên PTIT hệ chính quy dạng rút gọn trong email (VD: B22CN356, B21AT123)
+  // Regex nhận diện mã sinh viên PTIT hệ chính quy dạng rút gọn trong email (VD: B22CN356, B21AT123, B22CQCN01)
   private static final Pattern SHORT_STUDENT_CODE_PATTERN = Pattern.compile(
-      "^B\\d{2}[A-Z]{2,3}\\d+$");
+      "^B\\d{2}[A-Z]{2,4}\\d+$");
 
   // Regex phát hiện ký tự dấu tiếng Việt sau khi phân tách Unicode
   private static final Pattern DIACRITICS_PATTERN = Pattern.compile("\\p{M}");
@@ -71,6 +71,17 @@ public final class PtitAccountUtils {
   }
 
   /**
+   * Kiểm tra xem một chuỗi có phải là mã sinh viên dạng rút gọn hay không (thiếu "DC", VD: B22CN356).
+   */
+  public static boolean isShortStudentCode(String code) {
+    if (code == null || code.isBlank()) {
+      return false;
+    }
+    String clean = code.trim().toUpperCase();
+    return SHORT_STUDENT_CODE_PATTERN.matcher(clean).matches() && !clean.contains("DC");
+  }
+
+  /**
    * Khôi phục mã sinh viên đầy đủ có "DC" (Đại học Chính quy). Ví dụ: "B22CN356" -> "B22DCCN356".
    */
   public static String normalizeToFullStudentCode(String code) {
@@ -78,8 +89,8 @@ public final class PtitAccountUtils {
       return null;
     }
     String clean = code.trim().toUpperCase();
-    if (SHORT_STUDENT_CODE_PATTERN.matcher(clean).matches() && !clean.contains("DC")) {
-      return clean.replaceFirst("^(B\\d{2})([A-Z]{2,3}\\d+)$", "$1DC$2");
+    if (isShortStudentCode(clean)) {
+      return clean.replaceFirst("^(B\\d{2})([A-Z]{2,4}\\d+)$", "$1DC$2");
     }
     return clean;
   }

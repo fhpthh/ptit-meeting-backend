@@ -11,6 +11,7 @@ public final class AuthErrorConstants {
   public static final String TOKEN_EXPIRED = "auth.token_expired";
   public static final String TOKEN_COMPROMISED = "auth.token_compromised";
   public static final String MUST_CHANGE_PASSWORD = "auth.must_change_password";
+  public static final String SHORT_CODE_NOT_ALLOWED = "auth.short_code_not_allowed";
 
   private AuthErrorConstants() {
   }

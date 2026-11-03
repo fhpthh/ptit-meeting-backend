@@ -36,13 +36,25 @@ public class UserServiceImpl implements UserService {
   public User authenticateWithPassword(String username, String rawPassword) {
     log.info("(authenticateWithPassword) username: {}", username);
 
-    User user = userRepository.findByEmailOrCode(username, username)
+    String cleanUsername = username != null ? username.trim() : "";
+
+    // Bắt buộc sinh viên phải nhập mã đầy đủ hoặc email trường, không cho phép dùng mã rút gọn (VD: B22CN356)
+    if (PtitAccountUtils.isShortStudentCode(cleanUsername)) {
+      log.warn("(authenticateWithPassword) Short student code is rejected: {}", cleanUsername);
+      throw new BusinessException(
+          StatusCode.AUTHENTICATION_FAILED,
+          AuthErrorConstants.SHORT_CODE_NOT_ALLOWED
+      );
+    }
+
+    User user = userRepository.findByEmailOrCode(cleanUsername.toLowerCase(), cleanUsername.toUpperCase())
+        .or(() -> userRepository.findByEmailOrCode(cleanUsername, cleanUsername))
         .orElseThrow(() -> new BusinessException(
             StatusCode.AUTHENTICATION_FAILED,
             AuthErrorConstants.INVALID_CREDENTIALS
         ));
 
-    if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+    if (user.getPasswordHash() == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
       log.warn("(authenticateWithPassword) Password mismatch for username: {}", username);
       throw new BusinessException(
           StatusCode.AUTHENTICATION_FAILED,
@@ -109,6 +121,12 @@ public class UserServiceImpl implements UserService {
             existingUser.setCode(normalizedCode);
             modified = true;
           }
+          // Khởi tạo mật khẩu mặc định nếu tài khoản sinh viên trước đó chưa có mật khẩu
+          if (existingUser.getAccountType() == AccountType.STUDENT && existingUser.getPasswordHash() == null) {
+            existingUser.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+            existingUser.setMustChangePassword(true);
+            modified = true;
+          }
           if (modified) {
             existingUser = userRepository.save(existingUser);
           }
@@ -118,13 +136,19 @@ public class UserServiceImpl implements UserService {
         })
         .orElseGet(() -> {
           log.info("(findOrCreateByEmail) JIT provisioning new user: {}", email);
+          String defaultPasswordHash = (accountType == AccountType.STUDENT)
+              ? passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD)
+              : null;
+          boolean mustChangePassword = (accountType == AccountType.STUDENT);
+
           User newUser = User.builder()
               .email(normalizedEmail)
               .fullName(fullName != null && !fullName.isBlank() ? fullName : email)
               .code(normalizedCode)
+              .passwordHash(defaultPasswordHash)
               .accountType(accountType)
               .status(UserStatus.ACTIVE)
-              .mustChangePassword(false)
+              .mustChangePassword(mustChangePassword)
               .build();
           User saved = userRepository.save(newUser);
           RoleCode defaultRole = (accountType == AccountType.STUDENT)
@@ -201,6 +225,12 @@ public class UserServiceImpl implements UserService {
       }
       if (department != null && !department.isBlank() && existing.getDepartment() == null) {
         existing.setDepartment(department.trim());
+        modified = true;
+      }
+      // Đảm bảo sinh viên luôn có mật khẩu mặc định Ptit@123 nếu trước đó chưa có mật khẩu
+      if (existing.getPasswordHash() == null) {
+        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+        existing.setMustChangePassword(true);
         modified = true;
       }
       if (modified) {
