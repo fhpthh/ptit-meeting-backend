@@ -19,6 +19,7 @@ public class TimetableErrorConstants {
 
   public static final String IMPORT_HISTORY_NOT_FOUND = "error.timetable.import-history.not-found";
   public static final String IMPORT_FILE_NOT_FOUND = "error.timetable.import-history.file-not-found";
+  public static final String CLASS_SECTION_NOT_FOUND = "error.timetable.class-section.not-found";
 
   private TimetableErrorConstants() {
   }

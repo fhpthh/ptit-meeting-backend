@@ -7,6 +7,7 @@ import org.ptit.meeting.modules.timetable.dto.response.ImportResultResponse;
 import org.ptit.meeting.modules.timetable.facade.TimetableAdminFacade;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,5 +31,17 @@ public class TimetableAdminController {
         semesterId, file, currentUser.getUserId()
     );
     return BaseResponse.success("timetable.import.master.success", response);
+  }
+
+  @PostMapping(value = "/sections/{sectionId}/enrollments/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public BaseResponse<ImportResultResponse> uploadStudentEnrollment(
+      @PathVariable("sectionId") Long sectionId,
+      @RequestParam("file") MultipartFile file,
+      @AuthenticationPrincipal CustomUserDetails currentUser
+  ) {
+    ImportResultResponse response = timetableAdminFacade.importStudentEnrollment(
+        sectionId, file, currentUser.getUserId()
+    );
+    return BaseResponse.success("timetable.import.enrollment.success", response);
   }
 }

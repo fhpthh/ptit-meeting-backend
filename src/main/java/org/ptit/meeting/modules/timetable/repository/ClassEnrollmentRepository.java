@@ -20,4 +20,6 @@ public interface ClassEnrollmentRepository
       Long studentId,
       EnrollmentStatus status
   );
+
+  boolean existsByClassSectionIdAndStudentId(Long classSectionId, Long studentId);
 }

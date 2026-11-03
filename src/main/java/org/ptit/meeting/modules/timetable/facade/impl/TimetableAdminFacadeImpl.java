@@ -21,14 +21,18 @@ import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportType;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
+import org.ptit.meeting.modules.timetable.dto.internal.StudentEnrollmentRowDto;
 import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
 import org.ptit.meeting.modules.timetable.dto.response.ImportResultResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
+import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.timetable.entity.ImportHistory;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.facade.TimetableAdminFacade;
+import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
 import org.ptit.meeting.modules.timetable.repository.ImportHistoryRepository;
 import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
+import org.ptit.meeting.modules.timetable.service.StudentEnrollmentService;
 import org.ptit.meeting.modules.timetable.service.TimetableService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,6 +47,8 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
   private final SemesterRepository semesterRepository;
   private final ExcelAdapterFactory adapterFactory;
   private final TimetableService timetableService;
+  private final StudentEnrollmentService studentEnrollmentService;
+  private final ClassSectionRepository classSectionRepository;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -169,12 +175,93 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
     );
   }
 
-  private List<MasterTimetableRowDto> parseExcel(
+  @Override
+  public ImportResultResponse importStudentEnrollment(
+      Long classSectionId,
       MultipartFile file,
-      ExcelImportAdapter<MasterTimetableRowDto> adapter,
+      Long uploadedBy
+  ) {
+    // 1. Kiểm tra lớp học phần tồn tại
+    ClassSection classSection = classSectionRepository.findById(classSectionId)
+        .orElseThrow(() -> BusinessException.notExisted(TimetableErrorConstants.CLASS_SECTION_NOT_FOUND));
+
+    // 2. Lưu file vật lý đối soát
+    String dateStr = java.time.LocalDate.now()
+        .format(java.time.format.DateTimeFormatter.ofPattern("ddMMyy"));
+    String customPrefix = String.format("%s_DSSV_%s", dateStr, classSection.getClassCode());
+
+    String filePath = fileStorageService.storeFile(
+        file,
+        TimetableConstants.MODULE_NAME,
+        customPrefix);
+
+    ImportHistory history;
+    try {
+      history = historyRepository.save(
+          ImportHistory.builder()
+              .semesterId(classSection.getSemesterId())
+              .uploadedBy(uploadedBy)
+              .fileName(file.getOriginalFilename())
+              .fileUrl(filePath)
+              .importType(ImportType.STUDENT_ENROLMENT)
+              .status(ImportStatus.PROCESSING)
+              .build()
+      );
+    } catch (Exception ex) {
+      log.error("(importStudentEnrollment) DB error creating ImportHistory, deleting orphan file: {}",
+          filePath, ex);
+      fileStorageService.deleteFile(filePath);
+      throw ex;
+    }
+
+    List<ImportRowError> errors = new ArrayList<>();
+    try {
+      // 3. Mở file và dùng Adapter STUDENT_ENROLMENT đọc dữ liệu
+      ExcelImportAdapter<StudentEnrollmentRowDto> adapter = adapterFactory.getAdapter(
+          ImportType.STUDENT_ENROLMENT);
+      List<StudentEnrollmentRowDto> validRows = parseExcel(file, adapter, errors);
+
+      // 4. Bàn giao danh sách sạch cho StudentEnrollmentService xử lý
+      TimetableProcessResult result = studentEnrollmentService.processStudentEnrollments(
+          classSectionId, validRows, errors);
+
+      // 5. Cập nhật kết quả cuối cùng
+      int totalExcelDataRows = validRows.size() + errors.size();
+      int failedCount = totalExcelDataRows - result.getSuccessCount();
+      updateHistorySuccess(history, totalExcelDataRows, result.getSuccessCount(), failedCount, errors);
+
+      ImportResultResponse.ImportStatistics statistics = ImportResultResponse.ImportStatistics.builder()
+          .headerRow(adapter.getHeaderRowIndex() + 1)
+          .dataStartRow(adapter.getDataStartRow() + 1)
+          .classSectionsProcessed(1)
+          .build();
+
+      return ImportResultResponse.builder()
+          .importId(history.getId())
+          .fileName(file.getOriginalFilename())
+          .fileSize(formatFileSize(file.getSize()))
+          .semesterId(classSection.getSemesterId())
+          .status(history.getStatus())
+          .totalRows(totalExcelDataRows)
+          .successRows(result.getSuccessCount())
+          .failureRows(failedCount)
+          .statistics(statistics)
+          .errors(errors)
+          .completedAt(LocalDateTime.now())
+          .build();
+    } catch (Exception ex) {
+      log.error("(importStudentEnrollment) Unexpected failure: ", ex);
+      updateHistoryFailed(history, ex.getMessage());
+      throw ex;
+    }
+  }
+
+  private <T> List<T> parseExcel(
+      MultipartFile file,
+      ExcelImportAdapter<T> adapter,
       List<ImportRowError> errors
   ) {
-    List<MasterTimetableRowDto> validRows = new ArrayList<>();
+    List<T> validRows = new ArrayList<>();
     try (InputStream is = file.getInputStream();
         Workbook workbook = WorkbookFactory.create(is)) {
 
@@ -189,7 +276,7 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
         }
         int rowNumber = i + 1;
 
-        MasterTimetableRowDto dto = adapter.adapt(row, rowNumber, errors);
+        T dto = adapter.adapt(row, rowNumber, errors);
         if (dto != null && adapter.validate(dto, rowNumber, errors)) {
           validRows.add(dto);
         }
