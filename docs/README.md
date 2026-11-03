@@ -18,6 +18,12 @@ phải đọc tài liệu trước khi tạo module mới hoặc thay đổi ki�
 - [06-auth-legacy-migration.md](./06-auth-legacy-migration.md): ngoại lệ tạm thời của module `auth`
   nhằm giữ nguyên luồng đăng nhập đã có trong source tham chiếu.
 
+## Tài liệu đặc tả giải pháp và nghiệp vụ
+
+- [semester-management-solution-design.md](./semester-management-solution-design.md): Giải pháp quản lý học kỳ và năm học.
+- [timetable-solution-design.md](./timetable-solution-design.md): Giải pháp import thời khóa biểu tổng (Master Timetable).
+- [pgv-features-specification.md](./pgv-features-specification.md): Đặc tả toàn bộ tính năng, luồng giao diện và hợp đồng API dành cho vai trò Phòng Giáo vụ (`ROLE_STAFF`, `ROLE_ADMIN`).
+
 ## Quy trình bắt buộc dành cho AI
 
 Trước khi sửa source, AI phải:
