@@ -20,6 +20,9 @@ public class TimetableErrorConstants {
       "error.timetable.semester.active-delete-forbidden";
   public static final String SEMESTER_HAS_RELATED_DATA =
       "error.timetable.semester.has-related-data";
+  public static final String SUBJECT_NOT_FOUND = "error.timetable.subject.not-found";
+  public static final String SEMESTER_SUBJECT_NOT_FOUND =
+      "error.timetable.semester-subject.not-found";
 
   public static final String IMPORT_HISTORY_NOT_FOUND = "error.timetable.import-history.not-found";
   public static final String IMPORT_FILE_NOT_FOUND = "error.timetable.import-history.file-not-found";

@@ -24,9 +24,35 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Long
 
   List<ClassSection> findAllBySemesterIdAndLecturerId(Long semesterId, Long lecturerId);
 
+  List<ClassSection> findAllBySemesterIdAndSubjectIdAndCohort(
+      Long semesterId,
+      Long subjectId,
+      String cohort
+  );
+
   boolean existsByClassCodeAndSemesterId(String classCode, Long semesterId);
 
   boolean existsBySemesterId(Long semesterId);
+
+  @Query("""
+      SELECT DISTINCT section.cohort
+      FROM ClassSection section
+      WHERE section.semesterId = :semesterId
+        AND section.cohort IS NOT NULL
+        AND section.cohort <> ''
+      ORDER BY section.cohort
+      """)
+  List<String> findCohortsBySemesterId(@Param("semesterId") Long semesterId);
+
+  @Query("""
+      SELECT DISTINCT section.managementClass
+      FROM ClassSection section
+      WHERE section.semesterId = :semesterId
+        AND section.managementClass IS NOT NULL
+        AND section.managementClass <> ''
+      ORDER BY section.managementClass
+      """)
+  List<String> findManagementClassesBySemesterId(@Param("semesterId") Long semesterId);
 
   @Query("""
       SELECT new org.ptit.meeting.modules.timetable.dto.internal.SemesterClassSectionCountRow(
