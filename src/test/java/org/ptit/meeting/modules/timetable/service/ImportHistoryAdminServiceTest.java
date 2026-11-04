@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -18,9 +19,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.ptit.meeting.common.dto.request.PageRequestDTO;
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.common.service.FileStorageService;
 import org.ptit.meeting.exception.BusinessException;
+import org.ptit.meeting.modules.auth.repository.UserRepository;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.ImportType;
@@ -48,6 +51,9 @@ class ImportHistoryAdminServiceTest {
 
   @Mock
   private SemesterRepository semesterRepository;
+
+  @Mock
+  private UserRepository userRepository;
 
   @Mock
   private FileStorageService fileStorageService;
@@ -103,6 +109,8 @@ class ImportHistoryAdminServiceTest {
         "2026-2027-HK1",
         "Học kỳ 1 năm học 2026 - 2027",
         5L,
+        "PGV001",
+        "Cán bộ Phòng Giáo vụ",
         "1606_TKB-hoc-ky-1-nam-hoc-2026-2027.xlsx",
         ImportType.MASTER_TIMETABLE,
         4471,
@@ -120,6 +128,8 @@ class ImportHistoryAdminServiceTest {
         "2026-2027-HK1",
         "Học kỳ 1 năm học 2026 - 2027",
         5L,
+        "PGV001",
+        "Cán bộ Phòng Giáo vụ",
         "1606_TKB-hoc-ky-1-nam-hoc-2026-2027.xlsx",
         ImportType.MASTER_TIMETABLE,
         4471,
@@ -137,9 +147,13 @@ class ImportHistoryAdminServiceTest {
   @DisplayName("Search import histories returns paged response without error_log")
   void search_Success() {
     Page<ImportHistoryListRow> page = new PageImpl<>(List.of(listRow));
-    when(historyRepository.search(any(), any(), any(Pageable.class))).thenReturn(page);
+    when(historyRepository.search(
+        any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)
+    )).thenReturn(page);
     when(semesterRepository.findAllById(any())).thenReturn(List.of());
-    when(historyMapper.toResponse(any(ImportHistoryListRow.class), any())).thenReturn(historyResponse);
+    when(userRepository.findAllById(any())).thenReturn(List.of());
+    when(historyMapper.toResponse(any(ImportHistoryListRow.class), any(), any()))
+        .thenReturn(historyResponse);
 
     ImportHistorySearchRequest request = new ImportHistorySearchRequest();
     request.setSemesterId(1L);
@@ -181,11 +195,50 @@ class ImportHistoryAdminServiceTest {
   }
 
   @Test
+  @DisplayName("Get errors returns paged response")
+  void getErrors_Paged_ReturnsRequestedPage() {
+    when(historyRepository.findById(10L)).thenReturn(Optional.of(history));
+    when(historyMapper.parseErrors(history.getErrorLog())).thenReturn(List.of(
+        new ImportRowError(10, "Error 1"),
+        new ImportRowError(20, "Error 2"),
+        new ImportRowError(30, "Error 3")
+    ));
+    PageRequestDTO request = new PageRequestDTO();
+    request.setPage(1);
+    request.setSize(2);
+
+    PageResponseDTO<ImportRowError> result = historyAdminService.getErrors(10L, request);
+
+    assertEquals(3, result.totalElements());
+    assertEquals(1, result.content().size());
+    assertEquals(30, result.content().get(0).getRowNumber());
+  }
+
+  @Test
+  @DisplayName("Search rejects invalid date range")
+  void search_InvalidDateRange_ThrowsException() {
+    ImportHistorySearchRequest request = new ImportHistorySearchRequest();
+    request.setFromDate(LocalDate.of(2026, 10, 2));
+    request.setToDate(LocalDate.of(2026, 10, 1));
+
+    BusinessException exception = assertThrows(
+        BusinessException.class,
+        () -> historyAdminService.search(request)
+    );
+
+    assertEquals(
+        TimetableErrorConstants.IMPORT_HISTORY_DATE_RANGE_INVALID,
+        exception.getStrCode()
+    );
+  }
+
+  @Test
   @DisplayName("Get detail returns full detail response")
   void getDetail_Success() {
     when(historyRepository.findById(10L)).thenReturn(Optional.of(history));
     when(semesterRepository.findById(1L)).thenReturn(Optional.empty());
-    when(historyMapper.toDetailResponse(history, null)).thenReturn(detailResponse);
+    when(userRepository.findById(5L)).thenReturn(Optional.empty());
+    when(historyMapper.toDetailResponse(history, null, null)).thenReturn(detailResponse);
 
     ImportHistoryDetailResponse result = historyAdminService.getDetail(10L);
 

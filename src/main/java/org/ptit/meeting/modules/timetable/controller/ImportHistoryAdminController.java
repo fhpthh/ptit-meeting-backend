@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.ptit.meeting.common.dto.request.PageRequestDTO;
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.common.wrapper.BaseResponse;
 import org.ptit.meeting.modules.timetable.dto.internal.DownloadFileResult;
@@ -53,6 +54,15 @@ public class ImportHistoryAdminController {
   @GetMapping("/{id}/errors")
   public BaseResponse<List<ImportRowError>> getErrors(@PathVariable Long id) {
     List<ImportRowError> response = historyAdminService.getErrors(id);
+    return BaseResponse.success(messageUtil.getMessage(ERRORS_SUCCESS), response);
+  }
+
+  @GetMapping("/{id}/errors/paged")
+  public BaseResponse<PageResponseDTO<ImportRowError>> getErrorsPaged(
+      @PathVariable Long id,
+      @Valid @ModelAttribute PageRequestDTO request
+  ) {
+    PageResponseDTO<ImportRowError> response = historyAdminService.getErrors(id, request);
     return BaseResponse.success(messageUtil.getMessage(ERRORS_SUCCESS), response);
   }
 

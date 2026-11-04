@@ -16,9 +16,18 @@ public class TimetableErrorConstants {
       "error.timetable.semester.active-not-found";
   public static final String SEMESTER_CODE_EXISTED = "error.timetable.semester.code-existed";
   public static final String SEMESTER_START_DATE_NOT_MONDAY = "error.timetable.semester.start-date-not-monday";
+  public static final String SEMESTER_ACTIVE_DELETE_FORBIDDEN =
+      "error.timetable.semester.active-delete-forbidden";
+  public static final String SEMESTER_HAS_RELATED_DATA =
+      "error.timetable.semester.has-related-data";
+  public static final String SUBJECT_NOT_FOUND = "error.timetable.subject.not-found";
+  public static final String SEMESTER_SUBJECT_NOT_FOUND =
+      "error.timetable.semester-subject.not-found";
 
   public static final String IMPORT_HISTORY_NOT_FOUND = "error.timetable.import-history.not-found";
   public static final String IMPORT_FILE_NOT_FOUND = "error.timetable.import-history.file-not-found";
+  public static final String IMPORT_HISTORY_DATE_RANGE_INVALID =
+      "error.timetable.import-history.date-range-invalid";
   public static final String CLASS_SECTION_NOT_FOUND = "error.timetable.class-section.not-found";
 
   private TimetableErrorConstants() {

@@ -19,6 +19,8 @@ public interface ClassSchedulerRepository extends JpaRepository<ClassSchedule, L
 
   List<ClassSchedule> findAllByClassSectionId(Long classSectionId);
 
+  List<ClassSchedule> findAllByClassSectionIdIn(List<Long> classSectionIds);
+
   List<ClassSchedule> findAllByClassSectionIdAndIsOnlineTrue(Long classSectionId);
 
   Optional<ClassSchedule> findByClassSectionIdAndDayOfWeekAndStartPeriod(

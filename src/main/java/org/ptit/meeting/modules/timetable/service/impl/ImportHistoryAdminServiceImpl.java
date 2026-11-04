@@ -7,9 +7,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ptit.meeting.common.dto.request.PageRequestDTO;
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.common.service.FileStorageService;
 import org.ptit.meeting.exception.BusinessException;
+import org.ptit.meeting.modules.auth.entity.User;
+import org.ptit.meeting.modules.auth.repository.UserRepository;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.dto.internal.DownloadFileResult;
 import org.ptit.meeting.modules.timetable.dto.internal.ImportHistoryListRow;
@@ -25,6 +28,7 @@ import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.service.ImportHistoryAdminService;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,7 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
 
   private final ImportHistoryRepository historyRepository;
   private final SemesterRepository semesterRepository;
+  private final UserRepository userRepository;
   private final FileStorageService fileStorageService;
   private final ImportHistoryMapper historyMapper;
 
@@ -45,6 +50,12 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
   public PageResponseDTO<ImportHistoryResponse> search(ImportHistorySearchRequest request) {
     if (request == null) {
       request = new ImportHistorySearchRequest();
+    }
+    if (request.getFromDate() != null && request.getToDate() != null
+        && request.getFromDate().isAfter(request.getToDate())) {
+      throw BusinessException.invalidInput(
+          TimetableErrorConstants.IMPORT_HISTORY_DATE_RANGE_INVALID
+      );
     }
 
     Sort.Direction direction =
@@ -57,9 +68,15 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
         Sort.by(direction, sortBy)
     );
 
+    String keyword = normalizeKeyword(request.getKeyword());
     Page<ImportHistoryListRow> page = historyRepository.search(
         request.getSemesterId(),
         request.getStatus(),
+        request.getImportType(),
+        request.getUploadedBy(),
+        keyword,
+        request.getFromDate() != null ? request.getFromDate().atStartOfDay() : null,
+        request.getToDate() != null ? request.getToDate().plusDays(1).atStartOfDay() : null,
         pageable
     );
 
@@ -70,8 +87,20 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
     Map<Long, Semester> semesterMap = semesterRepository.findAllById(semesterIds).stream()
         .collect(Collectors.toMap(Semester::getId, s -> s));
 
+    Set<Long> uploaderIds = page.getContent().stream()
+        .map(ImportHistoryListRow::uploadedBy)
+        .filter(java.util.Objects::nonNull)
+        .collect(Collectors.toSet());
+
+    Map<Long, User> uploaderMap = userRepository.findAllById(uploaderIds).stream()
+        .collect(Collectors.toMap(User::getId, user -> user));
+
     Page<ImportHistoryResponse> responsePage = page.map(
-        row -> historyMapper.toResponse(row, semesterMap.get(row.semesterId()))
+        row -> historyMapper.toResponse(
+            row,
+            semesterMap.get(row.semesterId()),
+            uploaderMap.get(row.uploadedBy())
+        )
     );
 
     return PageResponseDTO.from(responsePage);
@@ -82,7 +111,10 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
   public ImportHistoryDetailResponse getDetail(Long id) {
     ImportHistory history = getHistoryEntity(id);
     Semester semester = semesterRepository.findById(history.getSemesterId()).orElse(null);
-    return historyMapper.toDetailResponse(history, semester);
+    User uploader = history.getUploadedBy() != null
+        ? userRepository.findById(history.getUploadedBy()).orElse(null)
+        : null;
+    return historyMapper.toDetailResponse(history, semester, uploader);
   }
 
   @Override
@@ -90,6 +122,23 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
   public List<ImportRowError> getErrors(Long id) {
     ImportHistory history = getHistoryEntity(id);
     return historyMapper.parseErrors(history.getErrorLog());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public PageResponseDTO<ImportRowError> getErrors(Long id, PageRequestDTO request) {
+    List<ImportRowError> errors = getErrors(id);
+    int pageNumber = request != null ? Math.max(request.getPage(), 0) : 0;
+    int pageSize = request != null ? Math.min(Math.max(request.getSize(), 1), 100) : 20;
+    int fromIndex = Math.min(pageNumber * pageSize, errors.size());
+    int toIndex = Math.min(fromIndex + pageSize, errors.size());
+    PageRequest pageable = PageRequest.of(pageNumber, pageSize);
+    Page<ImportRowError> page = new PageImpl<>(
+        errors.subList(fromIndex, toIndex),
+        pageable,
+        errors.size()
+    );
+    return PageResponseDTO.from(page);
   }
 
   @Override
@@ -147,5 +196,12 @@ public class ImportHistoryAdminServiceImpl implements ImportHistoryAdminService 
       case "createdAt", "updatedAt", "totalRows", "successRows", "failedRows", "status" -> value;
       default -> "createdAt";
     };
+  }
+
+  private String normalizeKeyword(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    return value.trim();
   }
 }

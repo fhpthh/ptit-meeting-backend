@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,8 +29,11 @@ import org.ptit.meeting.modules.timetable.dto.request.SemesterCreateRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterUpdateRequest;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterResponse;
+import org.ptit.meeting.modules.timetable.dto.internal.SemesterClassSectionCountRow;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.mapper.SemesterMapper;
+import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
+import org.ptit.meeting.modules.timetable.repository.ImportHistoryRepository;
 import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.service.impl.SemesterAdminServiceImpl;
 import org.springframework.data.domain.Page;
@@ -41,6 +45,12 @@ class SemesterAdminServiceTest {
 
   @Mock
   private SemesterRepository semesterRepository;
+
+  @Mock
+  private ClassSectionRepository classSectionRepository;
+
+  @Mock
+  private ImportHistoryRepository importHistoryRepository;
 
   @Mock
   private SemesterMapper semesterMapper;
@@ -78,6 +88,7 @@ class SemesterAdminServiceTest {
         LocalDate.of(2026, 12, 31),
         true,
         21L,
+        12L,
         null,
         null
     );
@@ -102,7 +113,8 @@ class SemesterAdminServiceTest {
     List<Semester> allSemesters = new ArrayList<>(List.of(semester));
     when(semesterRepository.findAllForUpdate()).thenReturn(allSemesters);
     when(scheduleDateCalculator.calculateTotalWeeks(any(), any())).thenReturn(21L);
-    when(semesterMapper.toResponse(any(Semester.class), eq(21L))).thenReturn(semesterResponse);
+    when(semesterMapper.toResponse(any(Semester.class), eq(21L), eq(0L)))
+        .thenReturn(semesterResponse);
 
     SemesterResponse actual = semesterAdminService.create(request);
 
@@ -197,8 +209,11 @@ class SemesterAdminServiceTest {
     when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
     when(semesterRepository.existsByCodeAndIdNot("2026-2027-HK1", 1L)).thenReturn(false);
     when(semesterRepository.save(any(Semester.class))).thenReturn(semester);
+    when(classSectionRepository.countBySemesterIds(anySet()))
+        .thenReturn(List.of(new SemesterClassSectionCountRow(1L, 12L)));
     when(scheduleDateCalculator.calculateTotalWeeks(any(), any())).thenReturn(21L);
-    when(semesterMapper.toResponse(any(Semester.class), eq(21L))).thenReturn(semesterResponse);
+    when(semesterMapper.toResponse(any(Semester.class), eq(21L), eq(12L)))
+        .thenReturn(semesterResponse);
 
     SemesterResponse actual = semesterAdminService.update(1L, request);
 
@@ -210,8 +225,11 @@ class SemesterAdminServiceTest {
   @DisplayName("Activate semester successfully")
   void activate_Success() {
     when(semesterRepository.findAllForUpdate()).thenReturn(new ArrayList<>(List.of(semester)));
+    when(classSectionRepository.countBySemesterIds(anySet()))
+        .thenReturn(List.of(new SemesterClassSectionCountRow(1L, 12L)));
     when(scheduleDateCalculator.calculateTotalWeeks(any(), any())).thenReturn(21L);
-    when(semesterMapper.toResponse(any(Semester.class), eq(21L))).thenReturn(semesterResponse);
+    when(semesterMapper.toResponse(any(Semester.class), eq(21L), eq(12L)))
+        .thenReturn(semesterResponse);
 
     SemesterResponse actual = semesterAdminService.activate(1L);
 
@@ -237,12 +255,77 @@ class SemesterAdminServiceTest {
   void search_NullRequest_HandlesGracefully() {
     Page<Semester> page = new PageImpl<>(List.of(semester));
     when(semesterRepository.search(any(), any(), any(Pageable.class))).thenReturn(page);
+    when(classSectionRepository.countBySemesterIds(anySet()))
+        .thenReturn(List.of(new SemesterClassSectionCountRow(1L, 12L)));
     when(scheduleDateCalculator.calculateTotalWeeks(any(), any())).thenReturn(21L);
-    when(semesterMapper.toResponse(any(Semester.class), eq(21L))).thenReturn(semesterResponse);
+    when(semesterMapper.toResponse(any(Semester.class), eq(21L), eq(12L)))
+        .thenReturn(semesterResponse);
 
     PageResponseDTO<SemesterResponse> result = semesterAdminService.search(null);
 
     assertNotNull(result);
     assertEquals(1, result.content().size());
+    verify(semesterMapper).toResponse(semester, 21L, 12L);
+  }
+
+  @Test
+  @DisplayName("Delete empty inactive semester successfully")
+  void delete_EmptyInactiveSemester_Success() {
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(classSectionRepository.existsBySemesterId(1L)).thenReturn(false);
+    when(importHistoryRepository.existsBySemesterId(1L)).thenReturn(false);
+
+    semesterAdminService.delete(1L);
+
+    verify(semesterRepository).delete(semester);
+  }
+
+  @Test
+  @DisplayName("Delete active semester is rejected")
+  void delete_ActiveSemester_ThrowsException() {
+    semester.setActive(true);
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+
+    BusinessException exception = assertThrows(
+        BusinessException.class,
+        () -> semesterAdminService.delete(1L)
+    );
+
+    assertEquals(
+        TimetableErrorConstants.SEMESTER_ACTIVE_DELETE_FORBIDDEN,
+        exception.getStrCode()
+    );
+    verify(semesterRepository, never()).delete(any());
+  }
+
+  @Test
+  @DisplayName("Delete semester containing class sections is rejected")
+  void delete_SemesterWithClassSections_ThrowsException() {
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(classSectionRepository.existsBySemesterId(1L)).thenReturn(true);
+
+    BusinessException exception = assertThrows(
+        BusinessException.class,
+        () -> semesterAdminService.delete(1L)
+    );
+
+    assertEquals(TimetableErrorConstants.SEMESTER_HAS_RELATED_DATA, exception.getStrCode());
+    verify(semesterRepository, never()).delete(any());
+  }
+
+  @Test
+  @DisplayName("Delete semester containing import history is rejected")
+  void delete_SemesterWithImportHistory_ThrowsException() {
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(classSectionRepository.existsBySemesterId(1L)).thenReturn(false);
+    when(importHistoryRepository.existsBySemesterId(1L)).thenReturn(true);
+
+    BusinessException exception = assertThrows(
+        BusinessException.class,
+        () -> semesterAdminService.delete(1L)
+    );
+
+    assertEquals(TimetableErrorConstants.SEMESTER_HAS_RELATED_DATA, exception.getStrCode());
+    verify(semesterRepository, never()).delete(any());
   }
 }

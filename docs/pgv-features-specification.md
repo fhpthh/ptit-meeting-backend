@@ -149,6 +149,7 @@ Frontend nên tổ chức Layout Admin/PGV với Sidebar như sau:
           "endDate": "2027-01-17",
           "isActive": true,
           "totalWeeks": 19,
+          "classSectionCount": 2846,
           "createdAt": "2026-11-01T10:00:00",
           "updatedAt": "2026-11-01T10:00:00"
         }
@@ -196,6 +197,10 @@ Frontend nên tổ chức Layout Admin/PGV với Sidebar như sau:
 #### API 5: Lấy Học kỳ Đang Kích hoạt
 * **Endpoint:** `GET /api/v1/admin/semesters/active`
 * **Mục đích:** FE dùng để chọn sẵn giá trị mặc định cho dropdown chọn Học kỳ trên các màn hình import và xem TKB.
+
+#### API 6: Xóa Học kỳ
+* **Endpoint:** `DELETE /api/v1/admin/semesters/{id}`
+* **Quy tắc nghiệp vụ:** Chỉ cho phép xóa học kỳ không hoạt động, chưa có lớp học phần và chưa có lịch sử import. Học kỳ đang hoạt động hoặc đã có dữ liệu liên quan sẽ bị từ chối để tránh mất dữ liệu.
 
 ---
 

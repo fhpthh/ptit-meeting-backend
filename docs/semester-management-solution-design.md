@@ -221,7 +221,8 @@ Authorization: Bearer <access_token>
         "startDate": "2026-08-10",
         "endDate": "2026-12-31",
         "isActive": true,
-        "totalWeeks": 21
+        "totalWeeks": 21,
+        "classSectionCount": 2846
       }
     ],
     "page": 0,
@@ -232,6 +233,11 @@ Authorization: Bearer <access_token>
   }
 }
 ```
+
+### 5.7. Xóa học kỳ trống
+* **URL:** `DELETE /api/v1/admin/semesters/{id}`
+* **Response (HTTP 200 OK):** Phản hồi thành công không kèm dữ liệu.
+* **Ràng buộc:** Không xóa học kỳ đang hoạt động hoặc học kỳ đã có lớp học phần/lịch sử import.
 
 ---
 

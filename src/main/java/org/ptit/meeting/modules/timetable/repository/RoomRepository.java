@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.timetable.repository;
 
+import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.timetable.entity.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,5 +15,7 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
   Optional<Room> findByClassSectionId(Long classSectionId);
 
   boolean existsByClassSectionId(Long classSectionId);
+
+  List<Room> findAllByClassSectionIdIn(List<Long> classSectionIds);
 
 }
