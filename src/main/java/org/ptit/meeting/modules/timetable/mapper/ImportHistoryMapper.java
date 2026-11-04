@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.timetable.dto.internal.ImportHistoryListRow;
 import org.ptit.meeting.modules.timetable.dto.response.ImportHistoryDetailResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ImportHistoryResponse;
@@ -22,7 +23,7 @@ public class ImportHistoryMapper {
 
   private final ObjectMapper objectMapper;
 
-  public ImportHistoryResponse toResponse(ImportHistoryListRow row, Semester semester) {
+  public ImportHistoryResponse toResponse(ImportHistoryListRow row, Semester semester, User uploader) {
     String semesterCode = semester != null ? semester.getCode() : null;
     String semesterName = semester != null ? semester.getName() : null;
     boolean hasErrors = row.failedRows() != null && row.failedRows() > 0;
@@ -33,6 +34,8 @@ public class ImportHistoryMapper {
         semesterCode,
         semesterName,
         row.uploadedBy(),
+        uploader != null ? uploader.getCode() : null,
+        uploader != null ? uploader.getFullName() : null,
         row.fileName(),
         row.importType(),
         row.totalRows() != null ? row.totalRows() : 0,
@@ -45,7 +48,7 @@ public class ImportHistoryMapper {
     );
   }
 
-  public ImportHistoryResponse toResponse(ImportHistory history, Semester semester) {
+  public ImportHistoryResponse toResponse(ImportHistory history, Semester semester, User uploader) {
     String semesterCode = semester != null ? semester.getCode() : null;
     String semesterName = semester != null ? semester.getName() : null;
     boolean hasErrors = history.getFailedRows() != null && history.getFailedRows() > 0;
@@ -56,6 +59,8 @@ public class ImportHistoryMapper {
         semesterCode,
         semesterName,
         history.getUploadedBy(),
+        uploader != null ? uploader.getCode() : null,
+        uploader != null ? uploader.getFullName() : null,
         history.getFileName(),
         history.getImportType(),
         history.getTotalRows() != null ? history.getTotalRows() : 0,
@@ -68,7 +73,11 @@ public class ImportHistoryMapper {
     );
   }
 
-  public ImportHistoryDetailResponse toDetailResponse(ImportHistory history, Semester semester) {
+  public ImportHistoryDetailResponse toDetailResponse(
+      ImportHistory history,
+      Semester semester,
+      User uploader
+  ) {
     String semesterCode = semester != null ? semester.getCode() : null;
     String semesterName = semester != null ? semester.getName() : null;
 
@@ -81,6 +90,8 @@ public class ImportHistoryMapper {
         semesterCode,
         semesterName,
         history.getUploadedBy(),
+        uploader != null ? uploader.getCode() : null,
+        uploader != null ? uploader.getFullName() : null,
         history.getFileName(),
         history.getImportType(),
         history.getTotalRows() != null ? history.getTotalRows() : 0,

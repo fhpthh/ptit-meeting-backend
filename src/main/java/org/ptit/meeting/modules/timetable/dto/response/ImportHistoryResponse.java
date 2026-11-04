@@ -10,6 +10,8 @@ public record ImportHistoryResponse(
     String semesterCode,
     String semesterName,
     Long uploadedBy,
+    String uploadedByCode,
+    String uploadedByName,
     String fileName,
     ImportType importType,
     int totalRows,
