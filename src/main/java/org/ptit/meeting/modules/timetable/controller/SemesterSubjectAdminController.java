@@ -8,9 +8,12 @@ import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.common.wrapper.BaseResponse;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSubjectSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionDetailResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectDetailResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectFilterResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
+import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectSectionsResponse;
 import org.ptit.meeting.modules.timetable.service.SemesterSubjectAdminService;
 import org.ptit.meeting.utils.MessageUtil;
 import org.springframework.http.ContentDisposition;
@@ -34,6 +37,10 @@ public class SemesterSubjectAdminController {
   private static final String LIST_SUCCESS = "timetable.admin.semester-subject.list.success";
   private static final String FILTERS_SUCCESS = "timetable.admin.semester-subject.filters.success";
   private static final String DETAIL_SUCCESS = "timetable.admin.semester-subject.detail.success";
+  private static final String SECTIONS_SUCCESS =
+      "timetable.admin.semester-subject.sections.success";
+  private static final String SECTION_DETAIL_SUCCESS =
+      "timetable.admin.semester-subject.section-detail.success";
 
   private final SemesterSubjectAdminService semesterSubjectAdminService;
   private final MessageUtil messageUtil;
@@ -66,6 +73,37 @@ public class SemesterSubjectAdminController {
     return BaseResponse.success(
         messageUtil.getMessage(DETAIL_SUCCESS),
         semesterSubjectAdminService.getDetail(semesterId, subjectId, cohort)
+    );
+  }
+
+  @GetMapping("/{subjectId}/sections")
+  public BaseResponse<SemesterSubjectSectionsResponse> searchSections(
+      @PathVariable Long semesterId,
+      @PathVariable Long subjectId,
+      @Valid @ModelAttribute ClassSectionSearchRequest request
+  ) {
+    return BaseResponse.success(
+        messageUtil.getMessage(SECTIONS_SUCCESS),
+        semesterSubjectAdminService.searchSections(semesterId, subjectId, request)
+    );
+  }
+
+  @GetMapping("/{subjectId}/sections/{sectionId}")
+  public BaseResponse<ClassSectionDetailResponse> getSectionDetail(
+      @PathVariable Long semesterId,
+      @PathVariable Long subjectId,
+      @PathVariable Long sectionId,
+      @RequestParam @NotBlank(message = "{validation.timetable.subject.cohort.required}")
+      String cohort
+  ) {
+    return BaseResponse.success(
+        messageUtil.getMessage(SECTION_DETAIL_SUCCESS),
+        semesterSubjectAdminService.getSectionDetail(
+            semesterId,
+            subjectId,
+            sectionId,
+            cohort
+        )
     );
   }
 

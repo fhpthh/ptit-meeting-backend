@@ -58,6 +58,9 @@ public class ClassSection {
   @Column(name = "management_class", length = 255)
   private String managementClass;
 
+  @Column(name = "expected_student_count")
+  private Integer expectedStudentCount;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 30)
   @Builder.Default

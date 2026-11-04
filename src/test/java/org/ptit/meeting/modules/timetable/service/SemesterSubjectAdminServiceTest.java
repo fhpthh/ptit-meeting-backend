@@ -21,16 +21,25 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
+import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
+import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
+import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionListRow;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.internal.SemesterSubjectRow;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSubjectSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectFilterResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
+import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectSectionsResponse;
+import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.timetable.entity.Semester;
+import org.ptit.meeting.modules.timetable.entity.Subject;
+import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSchedulerRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
 import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.repository.SubjectRepository;
+import org.ptit.meeting.modules.timetable.repository.RoomRepository;
 import org.ptit.meeting.modules.timetable.service.impl.SemesterSubjectAdminServiceImpl;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -49,6 +58,12 @@ class SemesterSubjectAdminServiceTest {
 
   @Mock
   private ClassSchedulerRepository classSchedulerRepository;
+
+  @Mock
+  private ClassEnrollmentRepository classEnrollmentRepository;
+
+  @Mock
+  private RoomRepository roomRepository;
 
   @InjectMocks
   private SemesterSubjectAdminServiceImpl service;
@@ -137,5 +152,47 @@ class SemesterSubjectAdminServiceTest {
     verify(subjectRepository).searchBySemester(
         eq(1L), eq("D22"), eq(null), eq(null), eq(null), any(Pageable.class)
     );
+  }
+
+  @Test
+  @DisplayName("Search class sections returns enrollment and expected student counts")
+  void searchSections_ReturnsPagedClassSections() {
+    ClassSectionSearchRequest sectionRequest = new ClassSectionSearchRequest();
+    sectionRequest.setCohort("D22");
+    Subject subject = Subject.builder()
+        .id(10L)
+        .code("INT1448")
+        .name("Phat trien phan mem huong dich vu")
+        .credit(3)
+        .build();
+    ClassSection section = ClassSection.builder()
+        .id(20L)
+        .semesterId(1L)
+        .subjectId(10L)
+        .classCode("INT1448_01")
+        .cohort("D22")
+        .status(ClassSectionStatus.ACTIVE)
+        .build();
+    ClassSectionListRow row = new ClassSectionListRow(
+        20L, 1L, 10L, 30L, "Nguyen Van A", "D22", "INT1448_01", "01",
+        null, null, ClassSectionStatus.ACTIVE, 70, 68L
+    );
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(subjectRepository.findById(10L)).thenReturn(Optional.of(subject));
+    when(classSectionRepository.findAllBySemesterIdAndSubjectIdAndCohort(1L, 10L, "D22"))
+        .thenReturn(List.of(section));
+    when(classSectionRepository.searchAdminSections(
+        eq(1L), eq(10L), eq("D22"), eq(null), eq(EnrollmentStatus.ENROLLED),
+        eq("classCode"), eq("ASC"), any(Pageable.class)
+    )).thenReturn(new PageImpl<>(List.of(row)));
+    when(classSchedulerRepository.findAllByClassSectionIdIn(List.of(20L)))
+        .thenReturn(List.of());
+    when(roomRepository.findAllByClassSectionIdIn(List.of(20L))).thenReturn(List.of());
+
+    SemesterSubjectSectionsResponse result = service.searchSections(1L, 10L, sectionRequest);
+
+    assertEquals(1, result.classSections().totalElements());
+    assertEquals(68L, result.classSections().content().getFirst().enrolledStudentCount());
+    assertEquals(70, result.classSections().content().getFirst().expectedStudentCount());
   }
 }

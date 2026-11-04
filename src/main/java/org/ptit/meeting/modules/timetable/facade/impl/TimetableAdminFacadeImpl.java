@@ -220,13 +220,15 @@ public class TimetableAdminFacadeImpl implements TimetableAdminFacade {
       ExcelImportAdapter<StudentEnrollmentRowDto> adapter = adapterFactory.getAdapter(
           ImportType.STUDENT_ENROLMENT);
       List<StudentEnrollmentRowDto> validRows = parseExcel(file, adapter, errors);
+      int totalExcelDataRows = validRows.size() + errors.size();
 
       // 4. Bàn giao danh sách sạch cho StudentEnrollmentService xử lý
       TimetableProcessResult result = studentEnrollmentService.processStudentEnrollments(
           classSectionId, validRows, errors);
 
       // 5. Cập nhật kết quả cuối cùng
-      int totalExcelDataRows = validRows.size() + errors.size();
+      classSection.setExpectedStudentCount(totalExcelDataRows);
+      classSectionRepository.save(classSection);
       int failedCount = totalExcelDataRows - result.getSuccessCount();
       updateHistorySuccess(history, totalExcelDataRows, result.getSuccessCount(), failedCount, errors);
 

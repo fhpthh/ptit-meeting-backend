@@ -22,4 +22,7 @@ public interface ClassEnrollmentRepository
   );
 
   boolean existsByClassSectionIdAndStudentId(Long classSectionId, Long studentId);
+
+  long countByClassSectionIdAndStatus(Long classSectionId, EnrollmentStatus status);
+
 }
