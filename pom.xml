@@ -29,6 +29,7 @@
   </scm>
   <properties>
     <java.version>21</java.version>
+    <aws-sdk.version>2.57.8</aws-sdk.version>
     <livekit-server.version>0.16.0</livekit-server.version>
     <springdoc-openapi.version>3.1.1</springdoc-openapi.version>
   </properties>
@@ -90,6 +91,16 @@
       <groupId>io.livekit</groupId>
       <artifactId>livekit-server</artifactId>
       <version>${livekit-server.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${aws-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${aws-sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>org.springdoc</groupId>

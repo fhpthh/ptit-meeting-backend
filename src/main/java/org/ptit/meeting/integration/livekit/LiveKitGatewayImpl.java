@@ -18,7 +18,10 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
   private final LiveKitAPI liveKitApi;
   private final LiveKitTokenFactory tokenFactory;
 
-  LiveKitGatewayImpl(LiveKitAPI liveKitApi, LiveKitTokenFactory tokenFactory) {
+  LiveKitGatewayImpl(
+      LiveKitAPI liveKitApi,
+      LiveKitTokenFactory tokenFactory
+  ) {
     this.liveKitApi = liveKitApi;
     this.tokenFactory = tokenFactory;
   }
@@ -202,7 +205,7 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
       RuntimeException exception
   ) {
     log.warn("Unexpected LiveKit failure while attempting to {}", operation);
-    return new LiveKitIntegrationException("LiveKit participant operation failed", exception);
+    return new LiveKitIntegrationException("LiveKit operation failed", exception);
   }
 
   private void requireText(String value, String message) {

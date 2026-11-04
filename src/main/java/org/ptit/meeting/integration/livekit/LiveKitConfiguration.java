@@ -49,8 +49,11 @@ public class LiveKitConfiguration {
 
   @Bean
   @ConditionalOnProperty(prefix = "application.livekit", name = "enabled", havingValue = "true")
-  public LiveKitWebhookVerifier liveKitWebhookVerifier(WebhookReceiver webhookReceiver) {
-    return new LiveKitWebhookVerifierImpl(webhookReceiver);
+  public LiveKitWebhookVerifier liveKitWebhookVerifier(
+      WebhookReceiver webhookReceiver,
+      LiveKitProperties properties
+  ) {
+    return new LiveKitWebhookVerifierImpl(webhookReceiver, properties);
   }
 
   @Bean

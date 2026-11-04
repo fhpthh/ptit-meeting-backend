@@ -58,6 +58,20 @@ application:
     api-secret: ${LIVEKIT_API_SECRET:}
     join-token-ttl-ms: ${LIVEKIT_JOIN_TOKEN_TTL_MS:600000}
 
+  recording:
+    enabled: ${RECORDING_ENABLED:false}
+    cleanup-interval-ms: ${RECORDING_CLEANUP_INTERVAL_MS:120000}
+    stale-upload-timeout-ms: ${RECORDING_STALE_UPLOAD_TIMEOUT_MS:900000}
+    upload-part-url-ttl-ms: ${RECORDING_UPLOAD_PART_URL_TTL_MS:900000}
+    storage:
+      bucket: ${RECORDING_STORAGE_BUCKET:}
+      region: ${RECORDING_STORAGE_REGION:us-east-1}
+      public-base-url: ${RECORDING_STORAGE_PUBLIC_BASE_URL:http://localhost:9000}
+      endpoint: ${RECORDING_STORAGE_ENDPOINT:http://localhost:9000}
+      access-key: ${RECORDING_STORAGE_ACCESS_KEY:}
+      secret-key: ${RECORDING_STORAGE_SECRET_KEY:}
+      force-path-style: ${RECORDING_STORAGE_FORCE_PATH_STYLE:true}
+
   security:
     jwt:
       secret-key: ${JWT_SECRET_KEY}

@@ -18,4 +18,5 @@ public interface LiveKitGateway {
   boolean removeParticipant(String roomName, String participantIdentity);
 
   void broadcastReliableData(String roomName, byte[] data, String topic);
+
 }

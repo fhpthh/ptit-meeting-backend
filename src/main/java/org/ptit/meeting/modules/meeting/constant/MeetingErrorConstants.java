@@ -65,6 +65,16 @@ public final class MeetingErrorConstants {
       "error.meeting.hand-raise.not-allowed";
   public static final String HAND_RAISE_UNAVAILABLE =
       "error.meeting.hand-raise.unavailable";
+  public static final String RECORDING_NOT_FOUND =
+      "error.meeting.recording.not-found";
+  public static final String RECORDING_ALREADY_ACTIVE =
+      "error.meeting.recording.already-active";
+  public static final String RECORDING_UNAVAILABLE =
+      "error.meeting.recording.unavailable";
+  public static final String RECORDING_NOT_ACTIVE =
+      "error.meeting.recording.not-active";
+  public static final String RECORDING_PART_NUMBER_INVALID =
+      "error.meeting.recording.part-number-invalid";
 
   private MeetingErrorConstants() {
   }
