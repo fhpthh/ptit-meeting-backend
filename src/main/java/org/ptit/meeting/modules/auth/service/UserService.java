@@ -1,6 +1,8 @@
 
 package org.ptit.meeting.modules.auth.service;
 
+import java.util.Collection;
+import java.util.List;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
 import org.ptit.meeting.modules.auth.entity.User;
 
@@ -11,6 +13,8 @@ public interface UserService {
   void validateUserStatus(User user);
 
   User getUserById(Long userId);
+
+  List<User> getUsersByIds(Collection<Long> userIds);
 
   User findOrCreateByEmail(String email, String fullName, String code, AccountType accountType);
 
