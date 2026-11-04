@@ -2,13 +2,16 @@ spring:
   application:
     name: ptit-meeting-backend
 
+  config:
+    import: "optional:file:.env[.properties]"
+
   liquibase:
-    enabled: false
+    enabled: ${LIQUIBASE_ENABLED:false}
 
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/ptit_meeting?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:24102004}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -18,7 +21,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${JPA_DDL_AUTO:update}
     open-in-view: false
     show-sql: false
     properties:
@@ -28,7 +31,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6380}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
 
@@ -47,6 +50,28 @@ azure:
     graph-user-info-url: https://graph.microsoft.com/v1.0/me
 
 application:
+  livekit:
+    enabled: ${LIVEKIT_ENABLED:true}
+    api-url: ${LIVEKIT_API_URL:http://localhost:7880}
+    websocket-url: ${LIVEKIT_WS_URL:ws://localhost:7880}
+    api-key: ${LIVEKIT_API_KEY:}
+    api-secret: ${LIVEKIT_API_SECRET:}
+    join-token-ttl-ms: ${LIVEKIT_JOIN_TOKEN_TTL_MS:600000}
+
+  recording:
+    enabled: ${RECORDING_ENABLED:false}
+    cleanup-interval-ms: ${RECORDING_CLEANUP_INTERVAL_MS:120000}
+    stale-upload-timeout-ms: ${RECORDING_STALE_UPLOAD_TIMEOUT_MS:900000}
+    upload-part-url-ttl-ms: ${RECORDING_UPLOAD_PART_URL_TTL_MS:900000}
+    storage:
+      bucket: ${RECORDING_STORAGE_BUCKET:}
+      region: ${RECORDING_STORAGE_REGION:us-east-1}
+      public-base-url: ${RECORDING_STORAGE_PUBLIC_BASE_URL:http://localhost:9000}
+      endpoint: ${RECORDING_STORAGE_ENDPOINT:http://localhost:9000}
+      access-key: ${RECORDING_STORAGE_ACCESS_KEY:}
+      secret-key: ${RECORDING_STORAGE_SECRET_KEY:}
+      force-path-style: ${RECORDING_STORAGE_FORCE_PATH_STYLE:true}
+
   security:
     jwt:
       secret-key: ${JWT_SECRET_KEY}
@@ -69,6 +94,14 @@ application:
         sub-dir: documents
         max-size-bytes: 52428800 # 50MB
         allowed-extensions: [ .pdf, .docx, .pptx ]
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
 
   timetable:
     periods:

@@ -3,6 +3,11 @@
 Thư mục này là nguồn quy ước chính thức cho source code của dự án. Lập trình viên và AI
 phải đọc tài liệu trước khi tạo module mới hoặc thay đổi kiến trúc trong `src`.
 
+## Local runtime
+
+- [07-local-runtime.md](./07-local-runtime.md): cấu hình MySQL tự tạo bảng bằng Hibernate,
+  các dependency runtime và Swagger UI cho giai đoạn MVP.
+
 ## Required reading
 
 Đọc theo thứ tự:
