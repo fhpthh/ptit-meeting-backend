@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,14 +26,19 @@ import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionListRow;
+import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionStudentRow;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.internal.SemesterSubjectRow;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSubjectSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionStudentSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionDetailResponse;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionStudentResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectFilterResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectSectionsResponse;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
+import org.ptit.meeting.modules.timetable.entity.ClassSchedule;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.entity.Subject;
 import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
@@ -42,6 +49,7 @@ import org.ptit.meeting.modules.timetable.repository.SubjectRepository;
 import org.ptit.meeting.modules.timetable.repository.RoomRepository;
 import org.ptit.meeting.modules.timetable.service.impl.SemesterSubjectAdminServiceImpl;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
@@ -194,5 +202,100 @@ class SemesterSubjectAdminServiceTest {
     assertEquals(1, result.classSections().totalElements());
     assertEquals(68L, result.classSections().content().getFirst().enrolledStudentCount());
     assertEquals(70, result.classSections().content().getFirst().expectedStudentCount());
+  }
+
+  @Test
+  @DisplayName("Get class section detail returns subject metadata and online schedules only")
+  void getSectionDetail_ReturnsOnlineScheduleAndDisplayMetadata() {
+    Subject subject = Subject.builder()
+        .id(10L)
+        .code("INT1448")
+        .name("Phát triển phần mềm hướng dịch vụ")
+        .credit(3)
+        .department("Khoa CNTT")
+        .build();
+    ClassSection section = ClassSection.builder()
+        .id(20L)
+        .semesterId(1L)
+        .subjectId(10L)
+        .classCode("INT1448_01")
+        .groupNumber("01")
+        .cohort("D22")
+        .status(ClassSectionStatus.ACTIVE)
+        .expectedStudentCount(70)
+        .build();
+    ClassSchedule onlineSchedule = ClassSchedule.builder()
+        .id(30L)
+        .classSectionId(20L)
+        .dayOfWeek(2)
+        .startPeriod(1)
+        .numPeriods(2)
+        .startTime(LocalTime.of(7, 0))
+        .endTime(LocalTime.of(8, 50))
+        .weeksPattern("[1, 2]")
+        .roomText("Online")
+        .isOnline(true)
+        .build();
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(subjectRepository.findById(10L)).thenReturn(Optional.of(subject));
+    when(classSectionRepository.findByIdAndSemesterIdAndSubjectIdAndCohort(
+        20L, 1L, 10L, "D22"
+    )).thenReturn(Optional.of(section));
+    when(classEnrollmentRepository.countByClassSectionIdAndStatus(
+        20L, EnrollmentStatus.ENROLLED
+    )).thenReturn(68L);
+    when(classSchedulerRepository.findAllByClassSectionIdAndIsOnlineTrue(20L))
+        .thenReturn(List.of(onlineSchedule));
+    when(roomRepository.findByClassSectionId(20L)).thenReturn(Optional.empty());
+
+    ClassSectionDetailResponse result = service.getSectionDetail(1L, 10L, 20L, "D22");
+
+    assertEquals("2026_HK1", result.semesterCode());
+    assertEquals("INT1448", result.subjectCode());
+    assertEquals(68L, result.enrolledStudentCount());
+    assertEquals(1, result.schedules().size());
+    assertTrue(result.schedules().getFirst().online());
+    verify(classSchedulerRepository).findAllByClassSectionIdAndIsOnlineTrue(20L);
+  }
+
+  @Test
+  @DisplayName("Search class section students returns enrolled accounts with pagination")
+  void searchSectionStudents_ReturnsPagedEnrolledStudents() {
+    ClassSectionStudentSearchRequest studentRequest = new ClassSectionStudentSearchRequest();
+    studentRequest.setCohort("D22");
+    studentRequest.setKeyword("B22DCCN");
+    Subject subject = Subject.builder().id(10L).code("INT1448").name("Subject").build();
+    ClassSection section = ClassSection.builder()
+        .id(20L)
+        .semesterId(1L)
+        .subjectId(10L)
+        .classCode("INT1448_01")
+        .cohort("D22")
+        .status(ClassSectionStatus.ACTIVE)
+        .build();
+    LocalDateTime enrolledAt = LocalDateTime.of(2026, 11, 4, 10, 30);
+    ClassSectionStudentRow row = new ClassSectionStudentRow(
+        40L, 50L, "B22DCCN093", "Lê Khánh Cường",
+        "cuonglk.b22cn093@stu.ptit.edu.vn", "D22CNPM03",
+        EnrollmentStatus.ENROLLED, enrolledAt
+    );
+    when(semesterRepository.findById(1L)).thenReturn(Optional.of(semester));
+    when(subjectRepository.findById(10L)).thenReturn(Optional.of(subject));
+    when(classSectionRepository.findByIdAndSemesterIdAndSubjectIdAndCohort(
+        20L, 1L, 10L, "D22"
+    )).thenReturn(Optional.of(section));
+    when(classEnrollmentRepository.searchStudents(
+        eq(20L), eq(EnrollmentStatus.ENROLLED), eq("B22DCCN"), eq("studentCode"),
+        eq("ASC"), any(Pageable.class)
+    )).thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));
+
+    PageResponseDTO<ClassSectionStudentResponse> result = service.searchSectionStudents(
+        1L, 10L, 20L, studentRequest
+    );
+
+    assertEquals(1, result.totalElements());
+    assertEquals("B22DCCN093", result.content().getFirst().studentCode());
+    assertEquals("D22CNPM03", result.content().getFirst().managementClass());
+    assertEquals("ENROLLED", result.content().getFirst().status());
   }
 }

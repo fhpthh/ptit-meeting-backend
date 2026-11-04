@@ -9,7 +9,9 @@ import org.ptit.meeting.common.wrapper.BaseResponse;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSubjectSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionStudentSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.response.ClassSectionDetailResponse;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionStudentResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectDetailResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectFilterResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
@@ -41,6 +43,8 @@ public class SemesterSubjectAdminController {
       "timetable.admin.semester-subject.sections.success";
   private static final String SECTION_DETAIL_SUCCESS =
       "timetable.admin.semester-subject.section-detail.success";
+  private static final String SECTION_STUDENTS_SUCCESS =
+      "timetable.admin.semester-subject.section-students.success";
 
   private final SemesterSubjectAdminService semesterSubjectAdminService;
   private final MessageUtil messageUtil;
@@ -103,6 +107,24 @@ public class SemesterSubjectAdminController {
             subjectId,
             sectionId,
             cohort
+        )
+    );
+  }
+
+  @GetMapping("/{subjectId}/sections/{sectionId}/students")
+  public BaseResponse<PageResponseDTO<ClassSectionStudentResponse>> searchSectionStudents(
+      @PathVariable Long semesterId,
+      @PathVariable Long subjectId,
+      @PathVariable Long sectionId,
+      @Valid @ModelAttribute ClassSectionStudentSearchRequest request
+  ) {
+    return BaseResponse.success(
+        messageUtil.getMessage(SECTION_STUDENTS_SUCCESS),
+        semesterSubjectAdminService.searchSectionStudents(
+            semesterId,
+            subjectId,
+            sectionId,
+            request
         )
     );
   }

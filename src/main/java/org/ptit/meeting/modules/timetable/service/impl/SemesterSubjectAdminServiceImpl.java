@@ -18,12 +18,15 @@ import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.internal.SemesterSubjectRow;
 import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionListRow;
+import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionStudentRow;
 import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionStudentSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.request.SemesterSubjectSearchRequest;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectDetailResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectFilterResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ClassSectionDetailResponse;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionStudentResponse;
 import org.ptit.meeting.modules.timetable.dto.response.ClassSectionSummaryResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectSectionsResponse;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
@@ -181,25 +184,15 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
       Long sectionId,
       String cohort
   ) {
-    getSemester(semesterId);
-    getSubject(subjectId);
-    ClassSection section = classSectionRepository
-        .findByIdAndSemesterIdAndSubjectIdAndCohort(
-            sectionId,
-            semesterId,
-            subjectId,
-            cohort.trim()
-        )
-        .orElseThrow(() -> BusinessException.notExisted(
-            TimetableErrorConstants.CLASS_SECTION_NOT_FOUND,
-            sectionId
-        ));
+    Semester semester = getSemester(semesterId);
+    Subject subject = getSubject(subjectId);
+    ClassSection section = getClassSection(semesterId, subjectId, sectionId, cohort);
     long enrolledCount = classEnrollmentRepository.countByClassSectionIdAndStatus(
         sectionId,
         EnrollmentStatus.ENROLLED
     );
     List<ClassSectionDetailResponse.ScheduleDetail> schedules = classSchedulerRepository
-        .findAllByClassSectionId(sectionId).stream()
+        .findAllByClassSectionIdAndIsOnlineTrue(sectionId).stream()
         .sorted(SCHEDULE_ORDER)
         .map(this::toClassSectionScheduleDetail)
         .toList();
@@ -209,12 +202,38 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
         .orElse(null);
 
     return new ClassSectionDetailResponse(
-        section.getId(), section.getSemesterId(), section.getSubjectId(), section.getClassCode(),
+        section.getId(), section.getSemesterId(), semester.getCode(), semester.getName(),
+        section.getSubjectId(), subject.getCode(), subject.getName(), subject.getCredit(),
+        subject.getDepartment(), section.getClassCode(),
         section.getGroupNumber(), section.getPracticeGroup(), section.getCohort(),
         section.getManagementClass(), section.getLecturerId(), section.getLecturerName(),
         section.getStatus().name(), enrolledCount, section.getExpectedStudentCount(),
         onlineRoom, schedules
     );
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public PageResponseDTO<ClassSectionStudentResponse> searchSectionStudents(
+      Long semesterId,
+      Long subjectId,
+      Long sectionId,
+      ClassSectionStudentSearchRequest request
+  ) {
+    getSemester(semesterId);
+    getSubject(subjectId);
+    getClassSection(semesterId, subjectId, sectionId, request.getCohort());
+
+    String direction = "DESC".equalsIgnoreCase(request.getDirection()) ? "DESC" : "ASC";
+    Page<ClassSectionStudentRow> students = classEnrollmentRepository.searchStudents(
+        sectionId,
+        EnrollmentStatus.ENROLLED,
+        normalize(request.getKeyword()),
+        normalizeStudentSort(request.getSortBy()),
+        direction,
+        PageRequest.of(request.getPage(), request.getSize())
+    );
+    return PageResponseDTO.from(students.map(this::toStudentResponse));
   }
 
   @Override
@@ -326,6 +345,30 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
     );
   }
 
+  private ClassSectionStudentResponse toStudentResponse(ClassSectionStudentRow row) {
+    return new ClassSectionStudentResponse(
+        row.enrollmentId(), row.studentId(), row.studentCode(), row.fullName(), row.email(),
+        row.managementClass(), row.status().name(), row.enrolledAt()
+    );
+  }
+
+  private ClassSection getClassSection(
+      Long semesterId,
+      Long subjectId,
+      Long sectionId,
+      String cohort
+  ) {
+    return classSectionRepository.findByIdAndSemesterIdAndSubjectIdAndCohort(
+        sectionId,
+        semesterId,
+        subjectId,
+        cohort.trim()
+    ).orElseThrow(() -> BusinessException.notExisted(
+        TimetableErrorConstants.CLASS_SECTION_NOT_FOUND,
+        sectionId
+    ));
+  }
+
   private SemesterSubjectResponse toSubjectResponse(
       Subject subject,
       Semester semester,
@@ -416,6 +459,16 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
     return switch (sortBy) {
       case "groupNumber", "lecturerName", "enrolledStudentCount", "schedule", "room" -> sortBy;
       default -> "classCode";
+    };
+  }
+
+  private String normalizeStudentSort(String sortBy) {
+    if (sortBy == null) {
+      return "studentCode";
+    }
+    return switch (sortBy) {
+      case "fullName", "managementClass", "enrolledAt" -> sortBy;
+      default -> "studentCode";
     };
   }
 }

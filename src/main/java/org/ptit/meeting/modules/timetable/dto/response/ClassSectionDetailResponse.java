@@ -6,7 +6,13 @@ import java.util.List;
 public record ClassSectionDetailResponse(
     Long id,
     Long semesterId,
+    String semesterCode,
+    String semesterName,
     Long subjectId,
+    String subjectCode,
+    String subjectName,
+    Integer credit,
+    String department,
     String classCode,
     String groupNumber,
     String practiceGroup,
