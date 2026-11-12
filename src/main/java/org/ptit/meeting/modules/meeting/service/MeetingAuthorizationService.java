@@ -1,10 +1,10 @@
 package org.ptit.meeting.modules.meeting.service;
 
-import org.ptit.meeting.modules.meeting.entity.MeetingRoomMember;
+import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 
 public interface MeetingAuthorizationService {
 
-    MeetingRoomMember requireActiveMember(String roomId, Long userId);
+    ClassEnrollment requireActiveMember(String roomId, Long userId);
 
     void requireRoomOwner(String roomId, Long userId);
 

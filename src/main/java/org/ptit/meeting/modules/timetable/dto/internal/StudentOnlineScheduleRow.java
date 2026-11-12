@@ -2,7 +2,7 @@ package org.ptit.meeting.modules.timetable.dto.internal;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import org.ptit.meeting.modules.timetable.constant.enums.SessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 
 public record StudentOnlineScheduleRow(
     Long sessionId,
@@ -27,6 +27,8 @@ public record StudentOnlineScheduleRow(
     String subjectCode,
     String subjectName,
 
-    String roomName
+    String roomName,
+    String runtimeSessionId,
+    String meetingRoomId
 ) {
 }

@@ -4,17 +4,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.integration.livekit.dto.LiveKitWebhookPayload;
-import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.dto.internal.ParticipantConnectionEvent;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.LiveKitWebhookEventService;
 import org.ptit.meeting.modules.meeting.service.MeetingAttendanceService;
+import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
-import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingWebhookService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -32,8 +31,8 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
   private final LiveKitWebhookEventService webhookEventService;
   private final MeetingAttendanceService attendanceService;
   private final MeetingHandRaiseService handRaiseService;
-  private final MeetingModerationService moderationService;
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
+  private final MeetingJoinService joinService;
   private final ObjectMapper objectMapper;
 
   @Override
@@ -72,7 +71,7 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
       return ProcessingOutcome.ignored("PARTICIPANT_DATA_MISSING");
     }
 
-    Optional<MeetingRuntimeSession> runtimeSession = runtimeSessionRepository
+    Optional<MeetingSession> runtimeSession = runtimeSessionRepository
         .findByProviderRoomName(payload.roomName());
     if (runtimeSession.isEmpty()) {
       return ProcessingOutcome.ignored("RUNTIME_SESSION_NOT_FOUND");
@@ -84,19 +83,12 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
       return ProcessingOutcome.ignored("PARTICIPANT_METADATA_INVALID");
     }
     if (PARTICIPANT_JOINED.equals(payload.eventType())
-        && moderationService.enforceBan(
-            runtimeSession.get().getId(),
-            metadata.get().userId()
-        )) {
-      return ProcessingOutcome.ignored("PARTICIPANT_BANNED");
-    }
-    if (PARTICIPANT_JOINED.equals(payload.eventType())
-        && runtimeSession.get().getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
-      return ProcessingOutcome.ignored("RUNTIME_SESSION_NOT_ACTIVE");
+        && !joinService.admitParticipant(runtimeSession.get().getPublicId(), metadata.get().userId())) {
+      return ProcessingOutcome.ignored("PARTICIPANT_ACCESS_DENIED");
     }
 
     ParticipantConnectionEvent connectionEvent = new ParticipantConnectionEvent(
-        runtimeSession.get().getId(),
+        runtimeSession.get().getPublicId(),
         metadata.get().userId(),
         payload.participantIdentity(),
         payload.participantSid(),
@@ -166,10 +158,10 @@ public class MeetingWebhookServiceImpl implements MeetingWebhookService {
 
   private boolean isConsistent(
       LiveKitWebhookPayload payload,
-      MeetingRuntimeSession runtimeSession,
+      MeetingSession runtimeSession,
       ParticipantMetadata metadata
   ) {
-    return runtimeSession.getId().equals(metadata.runtimeSessionId())
+    return runtimeSession.getPublicId().equals(metadata.runtimeSessionId())
         && payload.participantIdentity().equals("user-" + metadata.userId());
   }
 

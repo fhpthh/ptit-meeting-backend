@@ -31,13 +31,46 @@ module có cùng thuật ngữ nghiệp vụ, entity và repository phải thêm
 JPA entity name và table ownership. Ví dụ:
 
 ```text
-modules.timetable.entity.MeetingSession              -> meeting_sessions
-modules.meeting.entity.MeetingRuntimeSession         -> meeting_runtime_sessions
+modules.meeting.entity.Room                          -> rooms
+modules.meeting.entity.MeetingSession                -> meeting_sessions
 modules.timetable.repository.MeetingSessionRepository
 modules.meeting.repository.MeetingRuntimeSessionRepository
 ```
 
 Tên API, DTO và service có thể giữ thuật ngữ nghiệp vụ công khai nếu chúng không tạo bean/entity xung đột.
+
+`Room` và `MeetingSession` là entity dùng chung duy nhất, do module `meeting` sở hữu.
+Tên `MeetingRuntimeSession*` ở API/service/DTO được giữ để tương thích client hiện có.
+ID số của TKB là khóa chính; `publicId` là UUID dùng cho API meeting và các liên kết
+ghi hình, điểm danh và thành viên phòng độc lập. Không tạo bản ghi runtime riêng cho một session TKB.
+
+Thành viên dùng chung do `timetable.entity.ClassEnrollment` sở hữu, lưu duy nhất
+trong `class_enrollments`; không còn `MeetingRoomMember`/`meeting_room_members`.
+Giữ tên resource TKB để giảm thay đổi luồng import và contract hiện có. Một bản ghi
+gắn `classSectionId` hoặc `roomId`, không đồng thời cả hai. Phòng gắn lớp chỉ đọc/ghi
+thành viên theo lớp; `roomId` chỉ dành cho phòng độc lập. `userId` thay cho
+`studentId` vì thành viên có thể là người dùng khác sinh viên. Vai trò meeting lưu
+ngay trên bản ghi; trạng thái lưu `ENROLLED`/`DROPPED`, API meeting ánh xạ sang
+`ACTIVE`/`INACTIVE`. Không thêm bảng quyền hoặc bản ghi thành viên phòng cho sinh
+viên đã thuộc lớp. Giảng viên phụ trách được suy ra từ lớp, không lưu OWNER của lớp.
+Danh sách/sĩ số sinh viên lọc theo `User.accountType = STUDENT` đã có, không thêm
+trường loại thành viên. Thêm một tài khoản STUDENT vào phòng lớp đồng nghĩa ghi danh
+vào lớp; chưa có khái niệm khách dự giờ riêng cho tài khoản STUDENT.
+
+Ngoại lệ có chủ đích để không thay đổi logic TKB do nhóm khác triển khai:
+`timetable.repository.RoomRepository` và `timetable.repository.MeetingSessionRepository`
+tiếp tục đọc/ghi các entity dùng chung theo ID số. Các truy vấn phân quyền trong
+`meeting.repository.MeetingRoomRepository` chỉ đọc phân công giảng viên và thành viên
+của TKB; quyết định quyền đặt trong `MeetingAuthorizationServiceImpl`. Các service
+meeting quản lý thành viên sử dụng trực tiếp `timetable.repository.ClassEnrollmentRepository`
+như repository của entity chung, tương tự cầu nối phòng/session. Không tạo repository
+thứ hai hoặc service chuyển tiếp cho cùng dữ liệu; không mở rộng ngoại lệ sang nghiệp vụ khác.
+
+Khởi tạo setting của phòng dùng chung đi qua `meeting.service.MeetingRoomService`, kể cả khi
+room được import bởi TKB. Không tạo setting trong entity callback/mapper. TKB dùng service
+`auth.UserService` để tìm giảng viên active, và service meeting để phát thay đổi quyền sau phân công.
+Phân công/vai trò/setting chỉ cập nhật LiveKit sau commit; đối soát định kỳ dùng dữ liệu hiện hành,
+không lưu thêm bản sao quyền hoặc token vào bảng mới. Giới hạn phòng hiện hành là 100 người.
 
 Giả sử feature là `room` và resource chính là `Room`:
 

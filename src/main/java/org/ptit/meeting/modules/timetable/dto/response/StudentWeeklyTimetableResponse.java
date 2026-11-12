@@ -3,7 +3,7 @@ package org.ptit.meeting.modules.timetable.dto.response;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import org.ptit.meeting.modules.timetable.constant.enums.SessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 
 public record StudentWeeklyTimetableResponse(
     StudentSemesterResponse semester,
@@ -43,7 +43,8 @@ public record StudentWeeklyTimetableResponse(
       LecturerInfo lecturer,
       RoomInfo room,
 
-      SessionStatus status
+      SessionStatus status,
+      String runtimeSessionId
   ) {
   }
 
@@ -68,7 +69,8 @@ public record StudentWeeklyTimetableResponse(
 
   public record RoomInfo(
       Long id,
-      String name
+      String name,
+      String meetingRoomId
   ) {
   }
 }

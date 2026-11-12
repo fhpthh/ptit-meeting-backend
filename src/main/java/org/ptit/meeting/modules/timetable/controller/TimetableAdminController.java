@@ -1,14 +1,20 @@
 package org.ptit.meeting.modules.timetable.controller;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.common.wrapper.BaseResponse;
 import org.ptit.meeting.modules.auth.security.CustomUserDetails;
 import org.ptit.meeting.modules.timetable.dto.response.ImportResultResponse;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionLecturerUpdateRequest;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionDetailResponse;
 import org.ptit.meeting.modules.timetable.facade.TimetableAdminFacade;
+import org.ptit.meeting.modules.timetable.service.SemesterSubjectAdminService;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +26,15 @@ import org.springframework.web.multipart.MultipartFile;
 public class TimetableAdminController {
 
   private final TimetableAdminFacade timetableAdminFacade;
+  private final SemesterSubjectAdminService semesterSubjectAdminService;
+
+  @PatchMapping("/sections/{sectionId}/lecturer")
+  public BaseResponse<ClassSectionDetailResponse> assignLecturer(
+      @PathVariable Long sectionId,
+      @Valid @RequestBody ClassSectionLecturerUpdateRequest request
+  ) {
+    return BaseResponse.success(semesterSubjectAdminService.assignLecturer(sectionId, request));
+  }
 
   @PostMapping(value = "/master/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public BaseResponse<ImportResultResponse> uploadMasterTimetable(

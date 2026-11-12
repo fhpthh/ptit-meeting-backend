@@ -29,6 +29,8 @@ public class TimetableErrorConstants {
   public static final String IMPORT_HISTORY_DATE_RANGE_INVALID =
       "error.timetable.import-history.date-range-invalid";
   public static final String CLASS_SECTION_NOT_FOUND = "error.timetable.class-section.not-found";
+  public static final String CLASS_SECTION_INACTIVE = "error.timetable.class-section.inactive";
+  public static final String LECTURER_INVALID = "error.timetable.lecturer.invalid";
 
   private TimetableErrorConstants() {
   }

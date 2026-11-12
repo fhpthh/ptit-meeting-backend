@@ -23,6 +23,8 @@ import static lombok.AccessLevel.PROTECTED;
 @NoArgsConstructor(access = PROTECTED)
 public class MeetingRoomSetting extends BaseEntity {
 
+  public static final int MAX_PARTICIPANTS = 100;
+
   @Column(name = "room_id", nullable = false, length = 36)
   private String roomId;
 

@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
-import org.ptit.meeting.modules.timetable.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.LecturerOnlineScheduleRow;
 import org.ptit.meeting.modules.timetable.dto.internal.LecturerScheduleTimeRow;
 import org.ptit.meeting.modules.timetable.dto.response.LecturerSemesterResponse;

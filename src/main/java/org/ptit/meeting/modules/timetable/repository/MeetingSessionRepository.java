@@ -4,10 +4,10 @@ import java.time.LocalDate;
 import java.util.List;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
-import org.ptit.meeting.modules.timetable.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentOnlineScheduleRow;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentScheduleTimeRow;
-import org.ptit.meeting.modules.timetable.entity.MeetingSession;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,6 +20,8 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
 
   boolean existsByScheduleIdAndStudyDate(Long scheduleId, LocalDate date);
 
+  List<MeetingSession> findAllByScheduleId(Long scheduleId);
+
   List<MeetingSession> findAllByRoomIdAndStudyDate(Long roomId, LocalDate date);
 
   /**
@@ -29,7 +31,8 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       + "JOIN ClassSchedule csc ON ms.scheduleId = csc.id "
       + "JOIN ClassSection cs ON csc.classSectionId = cs.id "
       + "JOIN ClassEnrollment ce ON ce.classSectionId = cs.id "
-      + "WHERE ce.studentId = :studentId "
+      + "WHERE ce.userId = :studentId "
+      + "  AND ce.status = org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus.ENROLLED "
       + "  AND ms.studyDate = :studyDate "
       + "  AND csc.isOnline = true "
       + "ORDER BY ms.scheduledStart ASC")
@@ -78,7 +81,9 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
         subject.code,
         subject.name,
 
-        room.name
+        room.name,
+        session.publicId,
+        room.publicId
     )
     FROM MeetingSession session
     JOIN ClassSchedule schedule
@@ -91,7 +96,7 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       ON subject.id = section.subjectId
     JOIN Room room
       ON room.id = session.roomId
-    WHERE enrollment.studentId = :studentId
+    WHERE enrollment.userId = :studentId
       AND enrollment.status = :enrollmentStatus
       AND section.semesterId = :semesterId
       AND section.status = :sectionStatus
@@ -122,7 +127,7 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       ON section.id = schedule.classSectionId
     JOIN ClassEnrollment enrollment
       ON enrollment.classSectionId = section.id
-    WHERE enrollment.studentId = :studentId
+    WHERE enrollment.userId = :studentId
       AND enrollment.status = :enrollmentStatus
       AND section.semesterId = :semesterId
       AND section.status = :sectionStatus
@@ -161,7 +166,9 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
         subject.code,
         subject.name,
 
-        room.name
+        room.name,
+        session.publicId,
+        room.publicId
     )
     FROM MeetingSession session
     JOIN ClassSchedule schedule

@@ -10,6 +10,13 @@ import org.ptit.meeting.integration.livekit.dto.LiveKitTokenResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import retrofit2.Response;
+import livekit.LivekitModels.ParticipantInfo;
+import livekit.LivekitModels.ParticipantPermission;
+import livekit.LivekitModels.TrackSource;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.ptit.meeting.integration.livekit.dto.LiveKitParticipantSnapshot;
 
 final class LiveKitGatewayImpl implements LiveKitGateway {
 
@@ -29,6 +36,66 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
   @Override
   public LiveKitTokenResult createJoinToken(LiveKitJoinGrant grant) {
     return tokenFactory.create(grant);
+  }
+
+  @Override
+  public void ensureRoom(String roomName, int maxParticipants) {
+    requireText(roomName, "LiveKit room name is invalid");
+    try {
+      Response<livekit.LivekitModels.Room> response = liveKitApi.getRoom()
+          .createRoom(roomName, 300, maxParticipants).execute();
+      if (response.isSuccessful()) return;
+      closeErrorBody(response);
+      throw new LiveKitIntegrationException("Unable to configure LiveKit room capacity");
+    } catch (IOException exception) {
+      throw connectionFailure("configure room capacity", exception);
+    }
+  }
+
+  @Override
+  public List<LiveKitParticipantSnapshot> listParticipants(String roomName) {
+    requireText(roomName, "LiveKit room name is invalid");
+    try {
+      Response<List<ParticipantInfo>> response = liveKitApi.getRoom().listParticipants(roomName).execute();
+      if (response.isSuccessful() && response.body() != null) {
+        return response.body().stream().map(this::toSnapshot).toList();
+      }
+      int status = response.code();
+      closeErrorBody(response);
+      if (status == 404) return List.of();
+      throw new LiveKitIntegrationException("Unable to list LiveKit participants");
+    } catch (IOException exception) {
+      throw connectionFailure("list participants", exception);
+    }
+  }
+
+  @Override
+  public boolean updateParticipant(LiveKitJoinGrant grant) {
+    ParticipantPermission permission = ParticipantPermission.newBuilder()
+        .setCanSubscribe(grant.canSubscribe()).setCanPublish(!grant.publishSources().isEmpty())
+        .addAllCanPublishSources(grant.publishSources().stream()
+            .map(source -> TrackSource.valueOf(source.toUpperCase(Locale.ROOT))).toList())
+        .setCanPublishData(false).setCanUpdateMetadata(false).build();
+    try {
+      Response<ParticipantInfo> response = liveKitApi.getRoom().updateParticipant(grant.roomName(),
+          grant.participantIdentity(), grant.participantName(), grant.participantMetadata(), permission).execute();
+      if (response.isSuccessful()) return true;
+      return handleParticipantOperationFailure(response, "update participant access",
+          grant.roomName(), grant.participantIdentity());
+    } catch (IOException exception) {
+      throw connectionFailure("update participant access", exception);
+    }
+  }
+
+  private LiveKitParticipantSnapshot toSnapshot(ParticipantInfo participant) {
+    ParticipantPermission permission = participant.getPermission();
+    Set<String> sources = !permission.getCanPublish() ? Set.of()
+        : permission.getCanPublishSourcesCount() == 0
+            ? Set.of("microphone", "camera", "screen_share", "screen_share_audio")
+            : permission.getCanPublishSourcesList().stream()
+                .map(source -> source.name().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+    return new LiveKitParticipantSnapshot(participant.getIdentity(), participant.getMetadata(),
+        participant.getJoinedAt(), permission.getCanSubscribe(), sources);
   }
 
   @Override

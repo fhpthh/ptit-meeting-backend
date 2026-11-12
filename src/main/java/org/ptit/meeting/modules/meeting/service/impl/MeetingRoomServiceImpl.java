@@ -3,33 +3,36 @@ package org.ptit.meeting.modules.meeting.service.impl;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import org.ptit.meeting.common.constant.StatusCode;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
-import org.ptit.meeting.modules.meeting.constant.enums.MemberStatus;
+import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomType;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomSettingUpdateRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomUpdateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRoomResponse;
-import org.ptit.meeting.modules.meeting.entity.MeetingRoom;
-import org.ptit.meeting.modules.meeting.entity.MeetingRoomMember;
+import org.ptit.meeting.modules.meeting.entity.Room;
+import org.ptit.meeting.modules.meeting.event.MeetingRoomAccessChangedEvent;
+import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoomSetting;
 import org.ptit.meeting.modules.meeting.mapper.MeetingRoomMapper;
-import org.ptit.meeting.modules.meeting.repository.MeetingRoomMemberRepository;
+import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomSettingRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -41,10 +44,11 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
 
     private final MeetingRoomRepository roomRepository;
     private final MeetingRoomSettingRepository settingRepository;
-    private final MeetingRoomMemberRepository memberRepository;
+    private final ClassEnrollmentRepository memberRepository;
     private final MeetingAuthorizationService authorizationService;
     private final MeetingRoomMapper roomMapper;
     private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -57,54 +61,64 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_TYPE_INVALID);
         }
 
-        MeetingRoom room = roomRepository.save(new MeetingRoom(
+        Room room = roomRepository.save(new Room(
                 generateRoomCode(),
                 name,
                 description,
                 roomType,
                 creator.getId()
         ));
-        MeetingRoomSetting setting = settingRepository.save(createDefaultSetting(room));
-        memberRepository.save(new MeetingRoomMember(
-                room.getId(),
-                creator.getId(),
-                MeetingRole.OWNER
-        ));
+        MeetingRoomSetting setting = initializeSetting(room);
+        memberRepository.save(ClassEnrollment.builder()
+                .roomId(room.getPublicId())
+                .userId(creator.getId())
+                .role(MeetingRole.OWNER)
+                .build());
 
         return roomMapper.toResponse(room, setting);
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public MeetingRoomResponse getById(String roomId, Long currentUserId) {
-        MeetingRoom room = findRoom(roomId);
-        authorizationService.requireActiveMember(room.getId(), currentUserId);
-        return roomMapper.toResponse(room, findSetting(room.getId()));
+        Room room = findRoom(roomId);
+        authorizationService.requireActiveMember(room.getPublicId(), currentUserId);
+        return roomMapper.toResponse(room, findSetting(room.getPublicId()));
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<MeetingRoomResponse> getMyRooms(Long currentUserId) {
         requireCurrentUserId(currentUserId);
         List<String> roomIds = memberRepository
-                .findAllByUserIdAndStatus(currentUserId, MemberStatus.ACTIVE)
+                .findAllByUserIdAndStatus(currentUserId, EnrollmentStatus.ENROLLED)
                 .stream()
-                .map(MeetingRoomMember::getRoomId)
+                .map(ClassEnrollment::getRoomId)
+                .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
 
-        if (roomIds.isEmpty()) {
-            return List.of();
+        Map<String, Room> accessibleRooms = new LinkedHashMap<>();
+        if (!roomIds.isEmpty()) {
+            roomRepository.findAllByPublicIdInAndStatusOrderByCreatedAtDesc(roomIds, RoomStatus.ACTIVE)
+                    .forEach(room -> accessibleRooms.put(room.getPublicId(), room));
         }
+        roomRepository.findClassRoomsForUser(currentUserId, RoomStatus.ACTIVE)
+                .forEach(room -> accessibleRooms.put(room.getPublicId(), room));
+        if (accessibleRooms.isEmpty()) return List.of();
 
-        List<MeetingRoom> rooms = roomRepository
-                .findAllByIdInAndStatusOrderByCreatedAtDesc(roomIds, RoomStatus.ACTIVE);
-        Map<String, MeetingRoomSetting> settings = settingRepository.findAllByRoomIdIn(roomIds)
+        List<Room> rooms = accessibleRooms.values().stream()
+                .sorted(Comparator.comparing(Room::getCreatedAt).reversed()).toList();
+        Map<String, MeetingRoomSetting> settings = settingRepository
+                .findAllByRoomIdIn(List.copyOf(accessibleRooms.keySet()))
                 .stream()
                 .collect(Collectors.toMap(MeetingRoomSetting::getRoomId, Function.identity()));
+        settings.values().forEach(this::normalizeSetting);
 
         return rooms.stream()
-                .map(room -> roomMapper.toResponse(room, requireSetting(settings, room.getId())))
+                .map(room -> roomMapper.toResponse(room,
+                        settings.containsKey(room.getPublicId()) ? settings.get(room.getPublicId())
+                                : initializeSetting(room)))
                 .toList();
     }
 
@@ -115,15 +129,15 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             MeetingRoomUpdateRequest request,
             Long currentUserId
     ) {
-        MeetingRoom room = findRoom(roomId);
-        authorizationService.requireRoomOwner(room.getId(), currentUserId);
+        Room room = findRoom(roomId);
+        authorizationService.requireRoomOwner(room.getPublicId(), currentUserId);
         requireActiveRoom(room);
 
         room.setName(requireValidName(request == null ? null : request.name()));
         room.setDescription(normalizeDescription(request.description()));
         roomRepository.save(room);
 
-        return roomMapper.toResponse(room, findSetting(room.getId()));
+        return roomMapper.toResponse(room, findSetting(room.getPublicId()));
     }
 
     @Override
@@ -133,18 +147,19 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
             MeetingRoomSettingUpdateRequest request,
             Long currentUserId
     ) {
-        MeetingRoom room = findRoom(roomId);
-        authorizationService.requireRoomOwner(room.getId(), currentUserId);
+        Room room = findRoom(roomId);
+        authorizationService.requireRoomOwner(room.getPublicId(), currentUserId);
         requireActiveRoom(room);
         validateSetting(request);
 
-        MeetingRoomSetting setting = findSetting(room.getId());
+        MeetingRoomSetting setting = findSetting(room.getPublicId());
         setting.setParticipantMicEnabled(request.participantMicEnabled());
         setting.setParticipantCameraEnabled(request.participantCameraEnabled());
         setting.setParticipantScreenShareEnabled(request.participantScreenShareEnabled());
         setting.setMaxParticipants(request.maxParticipants());
         setting.setJoinBeforeMinutes(request.joinBeforeMinutes());
         settingRepository.save(setting);
+        eventPublisher.publishEvent(new MeetingRoomAccessChangedEvent(room.getPublicId()));
 
         return roomMapper.toResponse(room, setting);
     }
@@ -152,9 +167,12 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
     @Override
     @Transactional
     public void archive(String roomId, Long currentUserId) {
-        MeetingRoom room = findRoom(roomId);
-        authorizationService.requireRoomOwner(room.getId(), currentUserId);
+        Room room = findRoom(roomId);
+        authorizationService.requireRoomOwner(room.getPublicId(), currentUserId);
         requireActiveRoom(room);
+        if (room.getClassSectionId() != null) {
+            throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_TIMETABLE_MANAGED);
+        }
         room.setStatus(RoomStatus.ARCHIVED);
         roomRepository.save(room);
     }
@@ -172,44 +190,60 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         }
     }
 
-    private MeetingRoom findRoom(String roomId) {
+    private Room findRoom(String roomId) {
         if (roomId == null || roomId.isBlank()) {
             throw BusinessException.notExisted(MeetingErrorConstants.ROOM_NOT_FOUND);
         }
-        return roomRepository.findById(roomId)
+        return roomRepository.findByPublicId(roomId)
                 .orElseThrow(() -> BusinessException.notExisted(
                         MeetingErrorConstants.ROOM_NOT_FOUND,
                         roomId
                 ));
     }
 
-    private MeetingRoomSetting findSetting(String roomId) {
-        return settingRepository.findByRoomId(roomId)
-                .orElseThrow(() -> new BusinessException(
-                        StatusCode.ERROR_IN_BACKEND,
-                        MeetingErrorConstants.SETTING_NOT_FOUND,
-                        roomId
-                ));
+    @Override
+    @Transactional
+    public MeetingRoomSetting getSetting(String roomId) {
+        return findSetting(roomId);
     }
 
-    private MeetingRoomSetting requireSetting(
-            Map<String, MeetingRoomSetting> settings,
-            String roomId
-    ) {
-        MeetingRoomSetting setting = settings.get(roomId);
-        if (setting == null) {
-            throw new BusinessException(
-                    StatusCode.ERROR_IN_BACKEND,
-                    MeetingErrorConstants.SETTING_NOT_FOUND,
-                    roomId
-            );
+    private MeetingRoomSetting findSetting(String roomId) {
+        return initializeSetting(findRoom(roomId));
+    }
+
+    @Override
+    @Transactional
+    public MeetingRoomSetting initializeSetting(Room room) {
+        MeetingRoomSetting existing = settingRepository.findByRoomId(room.getPublicId()).orElse(null);
+        if (existing == null) {
+            roomRepository.findByPublicIdForUpdate(room.getPublicId())
+                    .orElseThrow(() -> BusinessException.notExisted(MeetingErrorConstants.ROOM_NOT_FOUND));
+            existing = settingRepository.findByRoomId(room.getPublicId())
+                    .orElseGet(() -> settingRepository.save(createDefaultSetting(room)));
+        }
+        return normalizeSetting(existing);
+    }
+
+    private MeetingRoomSetting normalizeSetting(MeetingRoomSetting setting) {
+        if (setting.getMaxParticipants() > MeetingRoomSetting.MAX_PARTICIPANTS) {
+            setting.setMaxParticipants(MeetingRoomSetting.MAX_PARTICIPANTS);
+            settingRepository.save(setting);
         }
         return setting;
     }
 
-    private void requireActiveRoom(MeetingRoom room) {
+    @Override
+    @Transactional
+    public void refreshClassAccess(Long classSectionId) {
+        roomRepository.findByClassSectionId(classSectionId).ifPresent(room -> {
+            initializeSetting(room);
+            eventPublisher.publishEvent(new MeetingRoomAccessChangedEvent(room.getPublicId()));
+        });
+    }
+
+    private void requireActiveRoom(Room room) {
         if (room.getStatus() != RoomStatus.ACTIVE) {
-            throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_ARCHIVED, room.getId());
+            throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_ARCHIVED, room.getPublicId());
         }
     }
 
@@ -238,7 +272,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
                 || request.participantScreenShareEnabled() == null
                 || request.maxParticipants() == null
                 || request.maxParticipants() < 2
-                || request.maxParticipants() > 1000
+                || request.maxParticipants() > MeetingRoomSetting.MAX_PARTICIPANTS
                 || request.joinBeforeMinutes() == null
                 || request.joinBeforeMinutes() < 0
                 || request.joinBeforeMinutes() > 1440) {
@@ -246,12 +280,10 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         }
     }
 
-    private MeetingRoomSetting createDefaultSetting(MeetingRoom room) {
-        return switch (room.getRoomType()) {
-            case CLASS -> new MeetingRoomSetting(room.getId(), true, true, false, 200, 15);
-            case MEETING -> new MeetingRoomSetting(room.getId(), true, true, true, 100, 15);
-            case EVENT -> new MeetingRoomSetting(room.getId(), true, true, true, 1000, 30);
-        };
+    private MeetingRoomSetting createDefaultSetting(Room room) {
+        return new MeetingRoomSetting(room.getPublicId(), true, true,
+                room.getRoomType() != RoomType.CLASS, MeetingRoomSetting.MAX_PARTICIPANTS,
+                room.getRoomType() == RoomType.EVENT ? 30 : 15);
     }
 
     private String generateRoomCode() {

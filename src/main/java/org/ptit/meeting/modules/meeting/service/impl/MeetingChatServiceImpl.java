@@ -22,8 +22,8 @@ import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingChatMessageRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingChatMessageResponse;
-import org.ptit.meeting.modules.meeting.entity.MeetingRoomMember;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingChatService;
@@ -132,7 +132,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
         Instant.now()
     );
     MeetingChatMessageResponse storedMessage = appendMessage(
-        access.runtimeSession().getId(),
+        access.runtimeSession().getPublicId(),
         pendingMessage
     );
     broadcast(access.runtimeSession().getProviderRoomName(), storedMessage);
@@ -147,7 +147,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
       int limit,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = requireChatAccess(
+    MeetingSession runtimeSession = requireChatAccess(
         runtimeSessionId,
         currentUserId
     ).runtimeSession();
@@ -160,7 +160,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
     try {
       List<MapRecord<String, Object, Object>> records = redisTemplate.opsForStream()
           .reverseRange(
-              streamKey(runtimeSession.getId()),
+              streamKey(runtimeSession.getPublicId()),
               range,
               Limit.limit().count(normalizedLimit)
           );
@@ -288,28 +288,28 @@ public class MeetingChatServiceImpl implements MeetingChatService {
   }
 
   private ChatAccess requireChatAccess(String runtimeSessionId, Long currentUserId) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    MeetingRoomMember member = authorizationService.requireActiveMember(
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    ClassEnrollment member = authorizationService.requireActiveMember(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
+    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_NOT_ACTIVE,
           runtimeSessionId
       );
     }
-    moderationService.requireNotBanned(runtimeSession.getId(), currentUserId);
+    moderationService.requireNotBanned(runtimeSession.getPublicId(), currentUserId);
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
     return new ChatAccess(runtimeSession, member, user);
   }
 
-  private MeetingRuntimeSession findRuntimeSession(String runtimeSessionId) {
+  private MeetingSession findRuntimeSession(String runtimeSessionId) {
     if (runtimeSessionId == null || runtimeSessionId.isBlank()) {
       throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return runtimeSessionRepository.findById(runtimeSessionId)
+    return runtimeSessionRepository.findByPublicId(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
             runtimeSessionId
@@ -414,8 +414,8 @@ public class MeetingChatServiceImpl implements MeetingChatService {
   }
 
   private record ChatAccess(
-      MeetingRuntimeSession runtimeSession,
-      MeetingRoomMember member,
+      MeetingSession runtimeSession,
+      ClassEnrollment member,
       User user
   ) {
   }

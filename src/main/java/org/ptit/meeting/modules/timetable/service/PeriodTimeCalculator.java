@@ -30,7 +30,8 @@ public class PeriodTimeCalculator {
       Map.entry(12, new PeriodSlot(12, LocalTime.of(18, 0), LocalTime.of(18, 50))),
       Map.entry(13, new PeriodSlot(13, LocalTime.of(19, 0), LocalTime.of(19, 50))),
       Map.entry(14, new PeriodSlot(14, LocalTime.of(20, 0), LocalTime.of(20, 50))),
-      Map.entry(15, new PeriodSlot(15, LocalTime.of(21, 0), LocalTime.of(21, 50)))
+      Map.entry(15, new PeriodSlot(15, LocalTime.of(21, 0), LocalTime.of(21, 50))),
+      Map.entry(16, new PeriodSlot(16, LocalTime.of(22, 0), LocalTime.of(22, 50)))     
   );
   private final TimetableProperties timetableProperties;
   private final Map<Integer, PeriodSlot> activeSlots = new HashMap<>();

@@ -33,7 +33,7 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
         ON section.semesterId = semester.id
       JOIN ClassEnrollment enrollment
         ON enrollment.classSectionId = section.id
-      WHERE enrollment.studentId = :studentId
+      WHERE enrollment.userId = :studentId
         AND enrollment.status = :enrollmentStatus
       ORDER BY semester.startDate DESC
       """)

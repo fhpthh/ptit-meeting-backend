@@ -62,10 +62,12 @@ public class StudentTimetableMapper {
 
         new StudentWeeklyTimetableResponse.RoomInfo(
             row.roomId(),
-            row.roomName()
+            row.roomName(),
+            row.meetingRoomId()
         ),
 
-        row.sessionStatus()
+        row.sessionStatus(),
+        row.runtimeSessionId()
     );
   }
 

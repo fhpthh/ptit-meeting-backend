@@ -13,18 +13,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.auth.entity.User;
-import org.ptit.meeting.modules.auth.repository.UserRepository;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
-import org.ptit.meeting.modules.timetable.constant.enums.RoomStatus;
-import org.ptit.meeting.modules.timetable.constant.enums.SessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.MasterTimetableRowDto;
 import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
 import org.ptit.meeting.modules.timetable.entity.ClassSchedule;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
-import org.ptit.meeting.modules.timetable.entity.MeetingSession;
-import org.ptit.meeting.modules.timetable.entity.Room;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
+import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.entity.Subject;
 import org.ptit.meeting.modules.timetable.repository.ClassSchedulerRepository;
@@ -35,6 +34,11 @@ import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.repository.SubjectRepository;
 import org.ptit.meeting.modules.timetable.service.ScheduleDateCalculator;
 import org.ptit.meeting.modules.timetable.service.TimetableService;
+import org.ptit.meeting.modules.auth.service.UserService;
+import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +53,8 @@ public class TimetableServiceImpl implements TimetableService {
   private final ClassSchedulerRepository classScheduleRepository;
   private final RoomRepository roomRepository;
   private final MeetingSessionRepository sessionRepository;
-  private final UserRepository userRepository;
+  private final UserService userService;
+  private final MeetingRoomService meetingRoomService;
   private final ScheduleDateCalculator dateCalculator;
   private final ObjectMapper objectMapper;
 
@@ -128,13 +133,16 @@ public class TimetableServiceImpl implements TimetableService {
 
   private ClassSection upsertClassSection(Long semesterId, Long subjectId,
       MasterTimetableRowDto dto) {
-    Long lecturerId = findLecturerId(dto.getLecturerName());
+    User lecturer = userService.findLecturer(dto.getLecturerName()).orElse(null);
+    Long lecturerId = lecturer == null ? null : lecturer.getId();
     return classSectionRepository.findByClassCodeAndSemesterId(dto.getClassCode(), semesterId)
         .map(existing -> {
           if (lecturerId != null && existing.getLecturerId() == null) {
             existing.setLecturerId(lecturerId);
+            existing.setLecturerName(lecturer.getFullName());
+            meetingRoomService.refreshClassAccess(existing.getId());
           }
-          if (dto.getLecturerName() != null) {
+          if (existing.getLecturerId() == null && dto.getLecturerName() != null) {
             existing.setLecturerName(dto.getLecturerName());
           }
           return classSectionRepository.save(existing);
@@ -144,7 +152,7 @@ public class TimetableServiceImpl implements TimetableService {
                 .semesterId(semesterId)
                 .subjectId(subjectId)
                 .lecturerId(lecturerId)
-                .lecturerName(dto.getLecturerName())
+                .lecturerName(lecturer == null ? dto.getLecturerName() : lecturer.getFullName())
                 .cohort(dto.getCohort())
                 .classCode(dto.getClassCode())
                 .groupNumber(dto.getGroupNumber())
@@ -153,20 +161,6 @@ public class TimetableServiceImpl implements TimetableService {
                 .status(ClassSectionStatus.ACTIVE)
                 .build()
         ));
-  }
-
-  private Long findLecturerId(String lecturerName) {
-    if (lecturerName == null || lecturerName.isBlank()) {
-      return null;
-    }
-    String cleanName = lecturerName.trim();
-
-    return userRepository.findAllByFullNameIgnoreCase(cleanName).stream()
-        .findFirst()
-        .map(User::getId)
-        .orElseGet(() -> userRepository.findByEmailOrCode(cleanName, cleanName)
-            .map(User::getId)
-            .orElse(null));
   }
 
   private ClassSchedule upsertClassSchedule(Long classSectionId, MasterTimetableRowDto dto) {
@@ -209,7 +203,7 @@ public class TimetableServiceImpl implements TimetableService {
   }
 
   private Room allocateOnlineRoom(ClassSection section, AtomicInteger onlineRoomsAllocated) {
-    return roomRepository.findByClassSectionId(section.getId())
+    Room room = roomRepository.findByClassSectionId(section.getId())
         .orElseGet(() -> {
           onlineRoomsAllocated.incrementAndGet();
           return roomRepository.save(
@@ -221,17 +215,23 @@ public class TimetableServiceImpl implements TimetableService {
                   .build()
           );
         });
+    meetingRoomService.initializeSetting(room);
+    return room;
   }
 
   // Chống nhân đôi session khi re-import
   private int generateOnlineSessions(LocalDate semesterStart, ClassSchedule sched, Room room,
       MasterTimetableRowDto dto) {
     int count = 0;
+    Map<LocalDate, MeetingSession> existingSessions = new HashMap<>();
+    sessionRepository.findAllByScheduleId(sched.getId())
+        .forEach(session -> existingSessions.put(session.getStudyDate(), session));
     for (Integer weekNum : dto.getActiveWeeks()) {
       LocalDate studyDate = dateCalculator.calculateStudyDate(semesterStart, weekNum,
           sched.getDayOfWeek());
 
-      if (!sessionRepository.existsByScheduleIdAndStudyDate(sched.getId(), studyDate)) {
+      MeetingSession existing = existingSessions.get(studyDate);
+      if (existing == null) {
         sessionRepository.save(
             MeetingSession.builder()
                 .roomId(room.getId())
@@ -243,6 +243,15 @@ public class TimetableServiceImpl implements TimetableService {
                 .build()
         );
         count++;
+      } else if (existing.getStatus() == SessionStatus.SCHEDULED) {
+        LocalDateTime start = LocalDateTime.of(studyDate, sched.getStartTime());
+        LocalDateTime end = LocalDateTime.of(studyDate, sched.getEndTime());
+        if (!Objects.equals(existing.getScheduledStart(), start)
+            || !Objects.equals(existing.getScheduledEnd(), end)) {
+          existing.setScheduledStart(start);
+          existing.setScheduledEnd(end);
+          sessionRepository.save(existing);
+        }
       }
     }
     return count;
