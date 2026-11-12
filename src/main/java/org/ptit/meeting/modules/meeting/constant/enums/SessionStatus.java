@@ -1,4 +1,4 @@
-package org.ptit.meeting.modules.timetable.constant.enums;
+package org.ptit.meeting.modules.meeting.constant.enums;
 
 public enum SessionStatus {
   SCHEDULED,

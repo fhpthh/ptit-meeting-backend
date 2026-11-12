@@ -34,7 +34,7 @@ import org.ptit.meeting.modules.timetable.entity.ClassSchedule;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.entity.Subject;
-import org.ptit.meeting.modules.timetable.entity.Room;
+import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSchedulerRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
@@ -42,6 +42,13 @@ import org.ptit.meeting.modules.timetable.repository.SemesterRepository;
 import org.ptit.meeting.modules.timetable.repository.SubjectRepository;
 import org.ptit.meeting.modules.timetable.repository.RoomRepository;
 import org.ptit.meeting.modules.timetable.service.SemesterSubjectAdminService;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionLecturerUpdateRequest;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionLecturerResponse;
+import org.ptit.meeting.modules.auth.service.UserService;
+import org.ptit.meeting.modules.auth.entity.User;
+import org.ptit.meeting.modules.auth.constant.enums.AccountType;
+import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
+import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -65,6 +72,41 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
   private final ClassSchedulerRepository classSchedulerRepository;
   private final ClassEnrollmentRepository classEnrollmentRepository;
   private final RoomRepository roomRepository;
+  private final UserService userService;
+  private final MeetingRoomService meetingRoomService;
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ClassSectionLecturerResponse> searchLecturers(Long semesterId, String keyword) {
+    getSemester(semesterId);
+    return userService.searchLecturers(keyword).stream()
+        .map(user -> new ClassSectionLecturerResponse(
+            user.getId(), user.getCode(), user.getFullName(), user.getEmail())).toList();
+  }
+
+  @Override
+  @Transactional
+  public ClassSectionDetailResponse assignLecturer(Long sectionId, ClassSectionLecturerUpdateRequest request) {
+    ClassSection section = classSectionRepository.findByIdForUpdate(sectionId)
+        .orElseThrow(() -> BusinessException.notExisted(
+            TimetableErrorConstants.CLASS_SECTION_NOT_FOUND, sectionId));
+    if (section.getStatus() != ClassSectionStatus.ACTIVE) {
+      throw BusinessException.invalidInput(TimetableErrorConstants.CLASS_SECTION_INACTIVE);
+    }
+    if (request == null || request.lecturerId() == null || request.lecturerId() <= 0) {
+      throw BusinessException.invalidInput(TimetableErrorConstants.LECTURER_INVALID);
+    }
+    User lecturer = userService.getUserById(request.lecturerId());
+    userService.validateUserStatus(lecturer);
+    if (lecturer.getAccountType() != AccountType.LECTURER) {
+      throw BusinessException.invalidInput(TimetableErrorConstants.LECTURER_INVALID);
+    }
+    section.setLecturerId(lecturer.getId());
+    section.setLecturerName(lecturer.getFullName());
+    classSectionRepository.saveAndFlush(section);
+    meetingRoomService.refreshClassAccess(sectionId);
+    return toClassSectionDetail(section, getSemester(section.getSemesterId()), getSubject(section.getSubjectId()));
+  }
 
   @Override
   @Transactional(readOnly = true)
@@ -187,6 +229,11 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
     Semester semester = getSemester(semesterId);
     Subject subject = getSubject(subjectId);
     ClassSection section = getClassSection(semesterId, subjectId, sectionId, cohort);
+    return toClassSectionDetail(section, semester, subject);
+  }
+
+  private ClassSectionDetailResponse toClassSectionDetail(ClassSection section, Semester semester, Subject subject) {
+    Long sectionId = section.getId();
     long enrolledCount = classEnrollmentRepository.countByClassSectionIdAndStatus(
         sectionId,
         EnrollmentStatus.ENROLLED

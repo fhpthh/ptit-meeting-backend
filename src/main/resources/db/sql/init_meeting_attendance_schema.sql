@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS meeting_participant_connections (
   INDEX idx_meeting_connections_session_identity (runtime_session_id, participant_identity),
   INDEX idx_meeting_connections_open (runtime_session_id, left_at),
   CONSTRAINT fk_meeting_connections_runtime_session
-    FOREIGN KEY (runtime_session_id) REFERENCES meeting_runtime_sessions(id)
+    FOREIGN KEY (runtime_session_id) REFERENCES meeting_sessions(public_id)
     ON DELETE CASCADE,
   CONSTRAINT fk_meeting_connections_user
     FOREIGN KEY (user_id) REFERENCES users(id)

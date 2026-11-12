@@ -18,10 +18,10 @@ import org.ptit.meeting.modules.meeting.dto.request.MeetingSessionBanRequest;
 import org.ptit.meeting.modules.meeting.dto.request.ParticipantTrackMuteRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingSessionBanListItemResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingSessionBanResponse;
-import org.ptit.meeting.modules.meeting.entity.MeetingRoomMember;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.entity.MeetingSessionBan;
-import org.ptit.meeting.modules.meeting.event.MeetingParticipantBannedEvent;
+import org.ptit.meeting.modules.meeting.event.MeetingParticipantRemovedEvent;
 import org.ptit.meeting.modules.meeting.mapper.MeetingSessionBanMapper;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingSessionBanRepository;
@@ -53,7 +53,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       ParticipantTrackMuteRequest request,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = requireActiveSession(runtimeSessionId);
+    MeetingSession runtimeSession = requireActiveSession(runtimeSessionId);
     requireModerationPermission(runtimeSession, currentUserId, participantUserId);
 
     boolean muted = callProvider(() -> liveKitGateway.mutePublishedTrack(
@@ -75,7 +75,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       Long participantUserId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = requireActiveSession(runtimeSessionId);
+    MeetingSession runtimeSession = requireActiveSession(runtimeSessionId);
     requireModerationPermission(runtimeSession, currentUserId, participantUserId);
 
     boolean removed = callProvider(() -> liveKitGateway.removeParticipant(
@@ -97,7 +97,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       MeetingSessionBanRequest request,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = requireActiveSession(runtimeSessionId);
+    MeetingSession runtimeSession = requireActiveSession(runtimeSessionId);
     requireModerationPermission(runtimeSession, currentUserId, participantUserId);
 
     MeetingSessionBan ban = banRepository
@@ -113,7 +113,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
     }
     MeetingSessionBan savedBan = banRepository.save(ban);
 
-    eventPublisher.publishEvent(new MeetingParticipantBannedEvent(
+    eventPublisher.publishEvent(new MeetingParticipantRemovedEvent(
         runtimeSession.getProviderRoomName(),
         participantIdentity(participantUserId)
     ));
@@ -127,7 +127,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       Long participantUserId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = requireActiveSession(runtimeSessionId);
+    MeetingSession runtimeSession = requireActiveSession(runtimeSessionId);
     requireModerationPermission(runtimeSession, currentUserId, participantUserId);
 
     MeetingSessionBan ban = banRepository
@@ -146,7 +146,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = findSession(runtimeSessionId);
+    MeetingSession runtimeSession = findSession(runtimeSessionId);
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
@@ -188,7 +188,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       return false;
     }
 
-    MeetingRuntimeSession runtimeSession = findSession(runtimeSessionId);
+    MeetingSession runtimeSession = findSession(runtimeSessionId);
     callProvider(() -> liveKitGateway.removeParticipant(
         runtimeSession.getProviderRoomName(),
         participantIdentity(userId)
@@ -196,9 +196,9 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
     return true;
   }
 
-  private MeetingRuntimeSession requireActiveSession(String runtimeSessionId) {
-    MeetingRuntimeSession runtimeSession = findSession(runtimeSessionId);
-    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
+  private MeetingSession requireActiveSession(String runtimeSessionId) {
+    MeetingSession runtimeSession = findSession(runtimeSessionId);
+    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_NOT_ACTIVE,
           runtimeSessionId
@@ -207,11 +207,11 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
     return runtimeSession;
   }
 
-  private MeetingRuntimeSession findSession(String runtimeSessionId) {
+  private MeetingSession findSession(String runtimeSessionId) {
     if (runtimeSessionId == null || runtimeSessionId.isBlank()) {
       throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return runtimeSessionRepository.findById(runtimeSessionId)
+    return runtimeSessionRepository.findByPublicId(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
             runtimeSessionId
@@ -219,7 +219,7 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
   }
 
   private void requireModerationPermission(
-      MeetingRuntimeSession runtimeSession,
+      MeetingSession runtimeSession,
       Long currentUserId,
       Long participantUserId
   ) {
@@ -227,11 +227,11 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
       throw BusinessException.invalidInput(MeetingErrorConstants.MODERATION_SELF_ACTION);
     }
 
-    MeetingRoomMember actor = authorizationService.requireActiveMember(
+    ClassEnrollment actor = authorizationService.requireActiveMember(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    MeetingRoomMember target = authorizationService.requireActiveMember(
+    ClassEnrollment target = authorizationService.requireActiveMember(
         runtimeSession.getMeetingRoomId(),
         participantUserId
     );

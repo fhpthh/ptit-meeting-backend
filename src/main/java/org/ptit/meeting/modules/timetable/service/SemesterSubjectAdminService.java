@@ -1,5 +1,9 @@
 package org.ptit.meeting.modules.timetable.service;
 
+import java.util.List;
+import org.ptit.meeting.modules.timetable.dto.request.ClassSectionLecturerUpdateRequest;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionLecturerResponse;
+
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.modules.timetable.dto.internal.ExportFileResult;
 import org.ptit.meeting.modules.timetable.dto.request.ClassSectionSearchRequest;
@@ -13,6 +17,10 @@ import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectResponse;
 import org.ptit.meeting.modules.timetable.dto.response.SemesterSubjectSectionsResponse;
 
 public interface SemesterSubjectAdminService {
+
+  List<ClassSectionLecturerResponse> searchLecturers(Long semesterId, String keyword);
+
+  ClassSectionDetailResponse assignLecturer(Long sectionId, ClassSectionLecturerUpdateRequest request);
 
   PageResponseDTO<SemesterSubjectResponse> search(
       Long semesterId,

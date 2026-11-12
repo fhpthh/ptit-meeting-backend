@@ -8,8 +8,8 @@ import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRuntimeSessionCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRuntimeSessionScheduleSyncRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRuntimeSessionResponse;
-import org.ptit.meeting.modules.meeting.entity.MeetingRoom;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.meeting.entity.Room;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.mapper.MeetingRuntimeSessionMapper;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
@@ -48,8 +48,8 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
       MeetingRuntimeSessionCreateRequest request,
       Long currentUserId
   ) {
-    MeetingRoom room = findRoom(roomId);
-    authorizationService.requireRuntimeSessionHost(room.getId(), currentUserId);
+    Room room = findRoom(roomId);
+    authorizationService.requireRuntimeSessionHost(room.getPublicId(), currentUserId);
     requireActiveRoom(room);
 
     String title = normalizeTitle(request == null ? null : request.title());
@@ -57,8 +57,8 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     Instant scheduledEndAt = request.scheduledEndAt();
     validateScheduleTime(scheduledStartAt, scheduledEndAt);
 
-    MeetingRuntimeSession runtimeSession = new MeetingRuntimeSession(
-        room.getId(),
+    MeetingSession runtimeSession = new MeetingSession(
+        room,
         title,
         generateProviderRoomName(),
         null,
@@ -80,23 +80,23 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
       );
     }
 
-    MeetingRoom room = findRoom(request.meetingRoomId());
-    authorizationService.requireRuntimeSessionHost(room.getId(), request.createdByUserId());
+    Room room = findRoom(request.meetingRoomId());
+    authorizationService.requireRuntimeSessionHost(room.getPublicId(), request.createdByUserId());
     requireActiveRoom(room);
 
     String occurrenceId = normalizeScheduleOccurrenceId(request.scheduleOccurrenceId());
     String title = normalizeTitle(request.title());
     validateScheduleTime(request.scheduledStartAt(), request.scheduledEndAt());
 
-    Optional<MeetingRuntimeSession> existing = runtimeSessionRepository.findByScheduleOccurrenceId(
+    Optional<MeetingSession> existing = runtimeSessionRepository.findByScheduleOccurrenceId(
         occurrenceId
     );
     if (existing.isPresent()) {
-      return synchronize(existing.get(), room.getId(), request, title);
+      return synchronize(existing.get(), room.getPublicId(), request, title);
     }
 
-    MeetingRuntimeSession runtimeSession = new MeetingRuntimeSession(
-        room.getId(),
+    MeetingSession runtimeSession = new MeetingSession(
+        room,
         title,
         generateProviderRoomName(),
         occurrenceId,
@@ -110,9 +110,9 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Override
   @Transactional(readOnly = true)
   public List<MeetingRuntimeSessionResponse> getByRoom(String roomId, Long currentUserId) {
-    MeetingRoom room = findRoom(roomId);
-    authorizationService.requireActiveMember(room.getId(), currentUserId);
-    return runtimeSessionRepository.findAllByMeetingRoomIdOrderByScheduledStartAtAsc(room.getId())
+    Room room = findRoom(roomId);
+    authorizationService.requireActiveMember(room.getPublicId(), currentUserId);
+    return runtimeSessionRepository.findAllByRoom_PublicIdOrderByScheduledStartAsc(room.getPublicId())
         .stream()
         .map(runtimeSessionMapper::toResponse)
         .toList();
@@ -121,7 +121,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Override
   @Transactional(readOnly = true)
   public MeetingRuntimeSessionResponse getById(String runtimeSessionId, Long currentUserId) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
     authorizationService.requireActiveMember(runtimeSession.getMeetingRoomId(), currentUserId);
     return runtimeSessionMapper.toResponse(runtimeSession);
   }
@@ -129,15 +129,15 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Override
   @Transactional
   public MeetingRuntimeSessionResponse start(String runtimeSessionId, Long currentUserId) {
-    MeetingRuntimeSession runtimeSession = findManagedRuntimeSession(
+    MeetingSession runtimeSession = findManagedRuntimeSession(
         runtimeSessionId,
         currentUserId
     );
-    MeetingRoom room = findRoom(runtimeSession.getMeetingRoomId());
+    Room room = findRoom(runtimeSession.getMeetingRoomId());
     requireActiveRoom(room);
     requireStatus(runtimeSession, MeetingRuntimeSessionStatus.SCHEDULED);
 
-    runtimeSession.setStatus(MeetingRuntimeSessionStatus.ACTIVE);
+    runtimeSession.setRuntimeStatus(MeetingRuntimeSessionStatus.ACTIVE);
     runtimeSession.setActualStartAt(Instant.now());
     return runtimeSessionMapper.toResponse(saveTransition(runtimeSession));
   }
@@ -145,17 +145,17 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Override
   @Transactional
   public MeetingRuntimeSessionResponse end(String runtimeSessionId, Long currentUserId) {
-    MeetingRuntimeSession runtimeSession = findManagedRuntimeSession(
+    MeetingSession runtimeSession = findManagedRuntimeSession(
         runtimeSessionId,
         currentUserId
     );
     requireStatus(runtimeSession, MeetingRuntimeSessionStatus.ACTIVE);
 
-    runtimeSession.setStatus(MeetingRuntimeSessionStatus.ENDED);
+    runtimeSession.setRuntimeStatus(MeetingRuntimeSessionStatus.ENDED);
     runtimeSession.setActualEndAt(Instant.now());
-    MeetingRuntimeSession endedRuntimeSession = saveTransition(runtimeSession);
+    MeetingSession endedRuntimeSession = saveTransition(runtimeSession);
     eventPublisher.publishEvent(new MeetingRuntimeSessionEndedEvent(
-        endedRuntimeSession.getId(),
+        endedRuntimeSession.getPublicId(),
         endedRuntimeSession.getProviderRoomName()
     ));
     return runtimeSessionMapper.toResponse(endedRuntimeSession);
@@ -164,18 +164,18 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Override
   @Transactional
   public MeetingRuntimeSessionResponse cancel(String runtimeSessionId, Long currentUserId) {
-    MeetingRuntimeSession runtimeSession = findManagedRuntimeSession(
+    MeetingSession runtimeSession = findManagedRuntimeSession(
         runtimeSessionId,
         currentUserId
     );
     requireStatus(runtimeSession, MeetingRuntimeSessionStatus.SCHEDULED);
 
-    runtimeSession.setStatus(MeetingRuntimeSessionStatus.CANCELLED);
+    runtimeSession.setRuntimeStatus(MeetingRuntimeSessionStatus.CANCELLED);
     return runtimeSessionMapper.toResponse(saveTransition(runtimeSession));
   }
 
   private MeetingRuntimeSessionResponse synchronize(
-      MeetingRuntimeSession runtimeSession,
+      MeetingSession runtimeSession,
       String roomId,
       MeetingRuntimeSessionScheduleSyncRequest request,
       String title
@@ -186,7 +186,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
           request.scheduleOccurrenceId()
       );
     }
-    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.SCHEDULED) {
+    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.SCHEDULED) {
       return runtimeSessionMapper.toResponse(runtimeSession);
     }
 
@@ -196,7 +196,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     return runtimeSessionMapper.toResponse(saveScheduleSync(runtimeSession));
   }
 
-  private MeetingRuntimeSession saveScheduleSync(MeetingRuntimeSession runtimeSession) {
+  private MeetingSession saveScheduleSync(MeetingSession runtimeSession) {
     try {
       return runtimeSessionRepository.saveAndFlush(runtimeSession);
     } catch (DataIntegrityViolationException exception) {
@@ -211,22 +211,22 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     }
   }
 
-  private MeetingRuntimeSession saveTransition(MeetingRuntimeSession runtimeSession) {
+  private MeetingSession saveTransition(MeetingSession runtimeSession) {
     try {
       return runtimeSessionRepository.saveAndFlush(runtimeSession);
     } catch (OptimisticLockingFailureException exception) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_CONCURRENT_UPDATE,
-          runtimeSession.getId()
+          runtimeSession.getPublicId()
       );
     }
   }
 
-  private MeetingRuntimeSession findManagedRuntimeSession(
+  private MeetingSession findManagedRuntimeSession(
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
@@ -234,42 +234,42 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     return runtimeSession;
   }
 
-  private MeetingRuntimeSession findRuntimeSession(String runtimeSessionId) {
+  private MeetingSession findRuntimeSession(String runtimeSessionId) {
     if (runtimeSessionId == null || runtimeSessionId.isBlank()) {
       throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return runtimeSessionRepository.findById(runtimeSessionId)
+    return runtimeSessionRepository.findByPublicId(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
             runtimeSessionId
         ));
   }
 
-  private MeetingRoom findRoom(String roomId) {
+  private Room findRoom(String roomId) {
     if (roomId == null || roomId.isBlank()) {
       throw BusinessException.notExisted(MeetingErrorConstants.ROOM_NOT_FOUND);
     }
-    return roomRepository.findById(roomId)
+    return roomRepository.findByPublicId(roomId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.ROOM_NOT_FOUND,
             roomId
         ));
   }
 
-  private void requireActiveRoom(MeetingRoom room) {
+  private void requireActiveRoom(Room room) {
     if (room.getStatus() != RoomStatus.ACTIVE) {
-      throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_ARCHIVED, room.getId());
+      throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_ARCHIVED, room.getPublicId());
     }
   }
 
   private void requireStatus(
-      MeetingRuntimeSession runtimeSession,
+      MeetingSession runtimeSession,
       MeetingRuntimeSessionStatus expectedStatus
   ) {
-    if (runtimeSession.getStatus() != expectedStatus) {
+    if (runtimeSession.getRuntimeStatus() != expectedStatus) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_STATE_INVALID,
-          runtimeSession.getStatus(),
+          runtimeSession.getRuntimeStatus(),
           expectedStatus
       );
     }

@@ -7,6 +7,7 @@ public final class MeetingErrorConstants {
 
   public static final String ROOM_NOT_FOUND = "error.meeting.room.not-found";
   public static final String ROOM_ARCHIVED = "error.meeting.room.archived";
+  public static final String ROOM_TIMETABLE_MANAGED = "error.meeting.room.timetable-managed";
   public static final String ROOM_NAME_INVALID = "error.meeting.room.name-invalid";
   public static final String ROOM_DESCRIPTION_INVALID = "error.meeting.room.description-invalid";
   public static final String ROOM_TYPE_INVALID = "error.meeting.room.type-invalid";
@@ -35,6 +36,7 @@ public final class MeetingErrorConstants {
       "error.meeting.runtime-session.not-active";
   public static final String JOIN_TOO_EARLY = "error.meeting.join.too-early";
   public static final String JOIN_FAILED = "error.meeting.join.failed";
+  public static final String ROOM_FULL = "error.meeting.room.full";
   public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";
   public static final String WEBHOOK_SIGNATURE_INVALID =
       "error.meeting.webhook.signature-invalid";

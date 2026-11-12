@@ -105,18 +105,25 @@ CREATE TABLE IF NOT EXISTS meeting_sessions (
     CONSTRAINT fk_sess_sched FOREIGN KEY (schedule_id) REFERENCES class_schedules(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. GHI DANH SINH VIÊN
+-- 7. THÀNH VIÊN DÙNG CHUNG CHO LỚP HỌC PHẦN VÀ PHÒNG ĐỘC LẬP
 CREATE TABLE IF NOT EXISTS class_enrollments (
-                                                 id               BIGINT AUTO_INCREMENT PRIMARY KEY,
-                                                 class_section_id BIGINT      NOT NULL,
-                                                 student_id       BIGINT      NOT NULL,
-                                                 status           VARCHAR(30) NOT NULL DEFAULT 'ENROLLED',
-    enrolled_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_enrollment (class_section_id, student_id),
-    INDEX idx_enrollment_student (student_id),
-    INDEX idx_enrollment_class (class_section_id),
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    class_section_id BIGINT      NULL,
+    room_id          VARCHAR(36) NULL,
+    user_id          BIGINT      NOT NULL,
+    role             VARCHAR(30) NOT NULL DEFAULT 'PARTICIPANT',
+    status           VARCHAR(30) NOT NULL DEFAULT 'ENROLLED',
+    enrolled_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at       DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    UNIQUE KEY uk_enrollment_class_user (class_section_id, user_id),
+    UNIQUE KEY uk_enrollment_room_user (room_id, user_id),
+    INDEX idx_enrollment_user_status (user_id, status),
+    CONSTRAINT ck_enrollment_scope CHECK (
+        (class_section_id IS NOT NULL AND room_id IS NULL AND role <> 'OWNER')
+        OR (class_section_id IS NULL AND room_id IS NOT NULL)
+    ),
     CONSTRAINT fk_enr_class   FOREIGN KEY (class_section_id) REFERENCES class_sections(id) ON DELETE CASCADE,
-    CONSTRAINT fk_enr_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_enr_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8. LỊCH SỬ IMPORT

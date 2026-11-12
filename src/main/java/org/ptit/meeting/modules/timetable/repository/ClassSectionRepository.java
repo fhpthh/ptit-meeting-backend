@@ -22,6 +22,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ClassSectionRepository extends JpaRepository<ClassSection, Long> {
 
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT section FROM ClassSection section WHERE section.id = :id")
+  Optional<ClassSection> findByIdForUpdate(@Param("id") Long id);
+
   Optional<ClassSection> findByClassCodeAndSemesterId(String classCode, Long semesterId);
 
   List<ClassSection> findAllBySemesterId(Long semesterId);
@@ -47,11 +51,13 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Long
               section.id, section.semesterId, section.subjectId, section.lecturerId,
               section.lecturerName, section.cohort, section.classCode, section.groupNumber,
               section.practiceGroup, section.managementClass, section.status,
-              section.expectedStudentCount, COUNT(DISTINCT enrollment.id)
+              section.expectedStudentCount, COUNT(DISTINCT student.id)
           )
           FROM ClassSection section
           LEFT JOIN ClassEnrollment enrollment
             ON enrollment.classSectionId = section.id AND enrollment.status = :enrollmentStatus
+          LEFT JOIN User student ON student.id = enrollment.userId
+            AND student.accountType = org.ptit.meeting.modules.auth.constant.enums.AccountType.STUDENT
           LEFT JOIN ClassSchedule schedule ON schedule.classSectionId = section.id
           WHERE section.semesterId = :semesterId
             AND section.subjectId = :subjectId
@@ -70,8 +76,8 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Long
             CASE WHEN :sortBy = 'groupNumber' AND :direction = 'DESC' THEN section.groupNumber END DESC,
             CASE WHEN :sortBy = 'lecturerName' AND :direction = 'ASC' THEN section.lecturerName END ASC,
             CASE WHEN :sortBy = 'lecturerName' AND :direction = 'DESC' THEN section.lecturerName END DESC,
-            CASE WHEN :sortBy = 'enrolledStudentCount' AND :direction = 'ASC' THEN COUNT(DISTINCT enrollment.id) END ASC,
-            CASE WHEN :sortBy = 'enrolledStudentCount' AND :direction = 'DESC' THEN COUNT(DISTINCT enrollment.id) END DESC,
+            CASE WHEN :sortBy = 'enrolledStudentCount' AND :direction = 'ASC' THEN COUNT(DISTINCT student.id) END ASC,
+            CASE WHEN :sortBy = 'enrolledStudentCount' AND :direction = 'DESC' THEN COUNT(DISTINCT student.id) END DESC,
             CASE WHEN :sortBy = 'schedule' AND :direction = 'ASC' THEN MIN(schedule.dayOfWeek) END ASC,
             CASE WHEN :sortBy = 'schedule' AND :direction = 'ASC' THEN MIN(schedule.startTime) END ASC,
             CASE WHEN :sortBy = 'schedule' AND :direction = 'DESC' THEN MIN(schedule.dayOfWeek) END DESC,

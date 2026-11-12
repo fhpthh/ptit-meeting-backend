@@ -3,6 +3,8 @@ package org.ptit.meeting.modules.auth.service.impl;
 import java.util.Optional;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
+import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.common.constant.ErrorConstants;
@@ -93,6 +95,31 @@ public class UserServiceImpl implements UserService {
       return List.of();
     }
     return userRepository.findAllById(userIds);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<User> searchLecturers(String keyword) {
+    String normalized = keyword == null || keyword.isBlank() ? null : keyword.trim();
+    return userRepository.searchActiveLecturers(AccountType.LECTURER, UserStatus.ACTIVE,
+        normalized, PageRequest.of(0, 20));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<User> findLecturer(String identifier) {
+    if (identifier == null || identifier.isBlank()) return Optional.empty();
+    String value = identifier.trim();
+    List<User> byIdentifier = Stream.concat(userRepository.findByEmailIgnoreCase(value).stream(),
+            userRepository.findAllByCodeIgnoreCase(value).stream())
+        .filter(user -> user.getAccountType() == AccountType.LECTURER && user.isActive())
+        .collect(java.util.stream.Collectors.toMap(User::getId, user -> user, (first, second) -> first))
+        .values().stream().toList();
+    if (!byIdentifier.isEmpty()) return byIdentifier.size() == 1
+        ? Optional.of(byIdentifier.getFirst()) : Optional.empty();
+    List<User> byName = userRepository.findAllByFullNameIgnoreCaseAndAccountTypeAndStatus(
+        value, AccountType.LECTURER, UserStatus.ACTIVE);
+    return byName.size() == 1 ? Optional.of(byName.getFirst()) : Optional.empty();
   }
 
   @Override

@@ -16,7 +16,7 @@ import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStat
 import org.ptit.meeting.modules.meeting.constant.enums.ParticipantConnectionStatus;
 import org.ptit.meeting.modules.meeting.dto.internal.ParticipantConnectionEvent;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceResponse;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.entity.ParticipantConnection;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.repository.ParticipantConnectionRepository;
@@ -68,7 +68,7 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
@@ -86,7 +86,7 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
     Instant calculatedAt = runtimeSession.getActualEndAt() == null
         ? Instant.now()
         : runtimeSession.getActualEndAt();
-    boolean sessionIsActive = runtimeSession.getStatus()
+    boolean sessionIsActive = runtimeSession.getRuntimeStatus()
         == MeetingRuntimeSessionStatus.ACTIVE;
     return connectionsByUser.entrySet().stream()
         .map(entry -> summarize(
@@ -115,11 +115,11 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
     );
   }
 
-  private MeetingRuntimeSession findRuntimeSession(String runtimeSessionId) {
+  private MeetingSession findRuntimeSession(String runtimeSessionId) {
     if (runtimeSessionId == null || runtimeSessionId.isBlank()) {
       throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return runtimeSessionRepository.findById(runtimeSessionId)
+    return runtimeSessionRepository.findByPublicId(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
             runtimeSessionId

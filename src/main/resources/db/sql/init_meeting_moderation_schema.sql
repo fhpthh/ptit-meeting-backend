@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS meeting_session_bans (
   INDEX idx_meeting_session_bans_session_active (runtime_session_id, revoked_at),
   INDEX idx_meeting_session_bans_user (user_id),
   CONSTRAINT fk_meeting_session_bans_runtime_session
-    FOREIGN KEY (runtime_session_id) REFERENCES meeting_runtime_sessions(id)
+    FOREIGN KEY (runtime_session_id) REFERENCES meeting_sessions(public_id)
     ON DELETE CASCADE,
   CONSTRAINT fk_meeting_session_bans_user
     FOREIGN KEY (user_id) REFERENCES users(id)

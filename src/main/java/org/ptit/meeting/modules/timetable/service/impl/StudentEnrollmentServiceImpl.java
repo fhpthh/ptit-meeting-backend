@@ -62,7 +62,7 @@ public class StudentEnrollmentServiceImpl implements StudentEnrollmentService {
         if (!alreadyEnrolled) {
           ClassEnrollment enrollment = ClassEnrollment.builder()
               .classSectionId(classSection.getId())
-              .studentId(student.getId())
+              .userId(student.getId())
               .status(EnrollmentStatus.ENROLLED)
               .build();
           enrollmentRepository.save(enrollment);

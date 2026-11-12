@@ -9,18 +9,12 @@ import io.livekit.server.CanUpdateOwnMetadata;
 import io.livekit.server.RoomJoin;
 import io.livekit.server.RoomName;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import org.ptit.meeting.config.LiveKitProperties;
 import org.ptit.meeting.integration.livekit.dto.LiveKitJoinGrant;
 import org.ptit.meeting.integration.livekit.dto.LiveKitTokenResult;
 
 final class LiveKitTokenFactory {
-
-  private static final String MICROPHONE_SOURCE = "microphone";
-  private static final String CAMERA_SOURCE = "camera";
-  private static final String SCREEN_SHARE_SOURCE = "screen_share";
-  private static final String SCREEN_SHARE_AUDIO_SOURCE = "screen_share_audio";
 
   private final LiveKitProperties properties;
 
@@ -32,7 +26,7 @@ final class LiveKitTokenFactory {
     validateGrant(grant);
 
     try {
-      List<String> publishSources = resolvePublishSources(grant);
+      List<String> publishSources = grant.publishSources();
       AccessToken token = new AccessToken(properties.getApiKey(), properties.getApiSecret());
       token.setIdentity(grant.participantIdentity());
       setOptionalParticipantData(token, grant);
@@ -68,21 +62,6 @@ final class LiveKitTokenFactory {
     if (grant.participantMetadata() != null && !grant.participantMetadata().isBlank()) {
       token.setMetadata(grant.participantMetadata());
     }
-  }
-
-  private List<String> resolvePublishSources(LiveKitJoinGrant grant) {
-    List<String> sources = new ArrayList<>(4);
-    if (grant.canPublishMicrophone()) {
-      sources.add(MICROPHONE_SOURCE);
-    }
-    if (grant.canPublishCamera()) {
-      sources.add(CAMERA_SOURCE);
-    }
-    if (grant.canShareScreen()) {
-      sources.add(SCREEN_SHARE_SOURCE);
-      sources.add(SCREEN_SHARE_AUDIO_SOURCE);
-    }
-    return List.copyOf(sources);
   }
 
   private void validateGrant(LiveKitJoinGrant grant) {

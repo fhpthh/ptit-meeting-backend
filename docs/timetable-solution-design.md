@@ -1,6 +1,101 @@
 # PHÂN TÍCH & THIẾT KẾ GIẢI PHÁP IMPORT THỜI KHÓA BIỂU TỔNG (MASTER TIMETABLE)
 ## BUSINESS ANALYSIS & SYSTEM SOLUTION DESIGN DOCUMENT
 
+## Cập nhật triển khai: phòng và buổi học dùng chung với meeting
+
+Phần này thay thế các mô tả bên dưới về việc TKB sở hữu riêng `Room` và
+`MeetingSession`. Hai entity giữ tên, bảng `rooms`/`meeting_sessions`, ID số và
+ngày giờ địa phương của TKB, nhưng chuyển sang `modules.meeting.entity`.
+Không còn entity/bảng runtime được ứng dụng ghi song song cho cùng một buổi học.
+`ClassSchedule`, cách đọc file, nhận diện online, tính ngày/tiết và lọc lịch giữ nguyên.
+Re-import cùng lịch/ngày cập nhật thời gian của session SCHEDULED hiện có, không sinh
+bản ghi trùng và không thay đổi LIVE/ENDED/CANCELLED. Giữ khóa nhận diện lịch hiện có
+(lớp/thứ/tiết bắt đầu); không suy diễn xóa lịch từ các dòng vắng mặt trong file import.
+
+- Chỉ lịch online sinh phòng và session như trước. Phòng manual có thể không thuộc
+  lớp học phần; session manual có thể không có `scheduleId`. Session manual chưa
+  gắn lịch không được đưa vào truy vấn TKB hiện hữu.
+- `Room.publicId` và `MeetingSession.publicId` là UUID của API meeting. Các field
+  `sessionId`, `scheduleId`, `classSectionId`, `room.id` của API TKB giữ kiểu `Long`.
+  Mỗi item lịch bổ sung `runtimeSessionId`, và `room` bổ sung `meetingRoomId`.
+- Frontend dùng `runtimeSessionId` để gọi các endpoint hiện có:
+  `POST /api/v1/meeting-runtime-sessions/{runtimeSessionId}/start|join|end|cancel`.
+  Giảng viên bắt đầu buổi trước, sinh viên mới Join được; quy tắc thời gian vào
+  phòng, moderation và quyền ghi hình của meeting vẫn được áp dụng.
+- Chỉ có một trạng thái lưu trữ: `SCHEDULED`, `LIVE`, `ENDED`, `CANCELLED`.
+  API meeting ánh xạ `LIVE` thành `ACTIVE` để tương thích client cũ.
+  Các giá trị trạng thái phòng của TKB `ACTIVE`, `LOCKED`, `CLOSED` được giữ,
+  bổ sung `ARCHIVED` cho phòng manual. Không cho archive phòng gắn lớp qua API
+  meeting để tránh làm biến mất lịch đang được TKB lọc theo phòng active.
+- Thành viên được hợp nhất vào `ClassEnrollment`/`class_enrollments`. Không còn
+  bảng `meeting_room_members`. `classSectionId` dùng cho lớp online/offline,
+  `roomId` chỉ dùng cho phòng độc lập; CHECK và unique constraint chống phạm vi
+  không hợp lệ và trùng người trong cùng lớp/phòng. Đổi `studentId` thành `userId`,
+  thêm `role`, `roomId` và `updatedAt` cần cho contract meeting hiện có. Không thêm
+  trường phân loại, nguồn import hoặc bảng quyền riêng. Sĩ số và danh sách sinh viên
+  lọc theo loại tài khoản STUDENT đã có.
+- Giảng viên hiện tại của lớp active có quyền OWNER được suy ra từ lớp, không tạo
+  bản ghi OWNER trong danh sách lớp. Người khác phải có bản ghi ENROLLED; role
+  lưu ngay tại bản ghi đó, mặc định PARTICIPANT. Không fallback sang quyền phòng
+  nếu đã DROPPED. API danh sách thành viên trả cả giảng viên và thành viên import.
+  OWNER suy ra có `id = null`; các member thật giữ ID số, API meeting trả dạng chuỗi.
+- Giữ URL/payload CRUD meeting. Với phòng gắn lớp, thêm thành viên chính là ghi danh
+  vào lớp (tài khoản STUDENT sẽ có TKB); xóa chuyển cùng bản ghi sang DROPPED,
+  thu hồi cả TKB và quyền meeting. Giảng viên phụ trách được quản lý danh sách lớp
+  qua API này như OWNER; HOST không được thêm/xóa/đổi vai trò. Phòng độc lập vẫn CRUD
+  theo phòng. Chặn thêm/xóa/đổi vai trò của giảng viên hiện tại bằng API member.
+- Mẫu Excel sinh viên và thuật toán đọc file giữ nguyên. Import mới mặc định
+  PARTICIPANT; import lại không ghi đè HOST hoặc kích hoạt lại người đã DROPPED.
+  Thêm lại qua API là thao tác kích hoạt có chủ đích. Một tài khoản STUDENT được
+  thêm vào lớp là sinh viên ghi danh, không hỗ trợ trạng thái khách dự giờ riêng.
+- Xóa thành viên phát sự kiện ngắt các kết nối session LIVE sau khi commit. Đổi vai trò,
+  phân công giảng viên hoặc cập nhật setting phát sự kiện cập nhật quyền/metadata LiveKit.
+  Webhook participant_joined kiểm tra lại quyền, trạng thái, ban và sức chứa để xử lý token cũ.
+  Listener đồng bộ ngay sau commit trong transaction mới; quét session LIVE mỗi 30 giây
+  (bắt đầu sau 60 giây) để thử lại khi provider lỗi hoặc ứng dụng khởi động lại.
+- Import tạo setting cùng room qua MeetingRoomService.initializeSetting, khóa room và kiểm tra
+  lại để chống tạo trùng. Các phòng thiếu setting được bổ sung khi đọc/join; không dựng setting
+  tạm không lưu. Re-import giữ setting đã tùy chỉnh. Mọi loại phòng mặc định và tối đa 100 người,
+  tính cả chủ trì. Setting cũ lớn hơn 100 được đưa về 100 khi truy cập.
+- Join kiểm tra số kết nối thực tế, cho phép cùng identity kết nối lại khi phòng đầy và tạo
+  phòng LiveKit với giới hạn 100 để chặn đua đồng thời ở provider. Setting giới hạn thấp hơn
+  được kiểm tra thêm khi join và webhook, và được áp dụng cho kết nối đang mở khi cập nhật.
+  OWNER/HOST có mic, camera và chia sẻ màn hình; cờ participant chỉ áp dụng cho PARTICIPANT,
+  VIEWER chỉ được nghe/xem. FE theo dõi quyền/metadata trực tiếp từ LiveKit.
+- Lịch chưa map được giảng viên vẫn import bình thường. Chỉ map tài khoản LECTURER active,
+  ưu tiên email/mã rồi họ tên duy nhất, không chọn tùy tiện người trùng tên. Phân công thủ công
+  được giữ khi import lại. Giáo vụ/admin dùng các API dưới đây để hoàn tất phân công:
+  - GET /api/v1/admin/semesters/{semesterId}/subjects/lecturers?keyword=...
+    trả tối đa 20 giảng viên active với id/code/fullName/email.
+  - PATCH /api/v1/admin/timetable/sections/{sectionId}/lecturer
+    chỉ nhận sectionId trên path và {"lecturerId":...} trong body, trả ClassSectionDetailResponse.
+    BE tự lấy học kỳ/môn học/khóa từ lớp; không yêu cầu client gửi thêm query. Kiểm tra lớp,
+    trạng thái lớp, loại/trạng thái tài khoản trước khi lưu; không tạo thêm member OWNER.
+- Dữ liệu `LocalDateTime` của TKB được đổi sang `Instant` ở API meeting theo
+  `Asia/Ho_Chi_Minh`; không dùng timezone mặc định của máy chủ để đổi giờ lịch.
+
+### Database cho phiên bản hợp nhất thành viên
+
+Theo yêu cầu triển khai, dùng database trống và để Hibernate tạo schema hiện hành
+(`JPA_DDL_AUTO=update` hoặc `create`). Phải tạo database MySQL trước; Hibernate tạo
+bảng, không tạo database. Không cần migration dữ liệu cũ và không bổ sung script
+migration thành viên. Không dùng script migration phòng/session cũ để chuyển
+database chứa thành viên cũ sang phiên bản này. Các script SQL lịch sử chưa thay
+thế việc tạo đầy đủ schema hiện hành bằng entity JPA.
+
+Theo yêu cầu của thay đổi này, không tạo file test mới; chạy bộ test hiện có và
+kiểm tra mapping và luồng import/meeting trên database cô lập.
+
+Đã kiểm tra phiên bản này trên MySQL/LiveKit cô lập: import có setting thật, import lại
+không trùng, cập nhật giờ SCHEDULED và giữ lịch sử LIVE, phân công/đổi giảng viên, quyền
+OWNER/HOST và participant, sức chứa ở provider và CRUD phòng độc lập. Browser WebRTC thật
+(thiết bị camera giả) đã kiểm tra đổi vai trò/setting khi đang kết nối, token cũ, phòng đầy,
+đổi chủ trì, chat/giơ tay/điểm danh và đóng phòng. Webhook admission được ký và gửi chủ động
+vào cổng backend cô lập, không thay URL webhook của ứng dụng đang dùng. Bộ test sẵn có
+45/47 đạt; hai test adapter thiếu file Excel fixture bên ngoài. Không thêm file test vào repo.
+
+---
+
 > **Hệ thống:** PTIT Meeting — Nền tảng Phòng học số và Hội họp trực tuyến Học viện  
 > **Phân hệ:** Quản lý Đào tạo & Thời khóa biểu (`org.ptit.meeting.modules.timetable`)  
 > **Phiên bản tài liệu:** 3.0 (Chuẩn hóa toàn diện theo nghiệp vụ thực tế của PTIT)  

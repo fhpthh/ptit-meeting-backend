@@ -67,10 +67,12 @@ public class LecturerTimetableMapper {
 
         new LecturerWeeklyTimetableResponse.RoomInfo(
             row.roomId(),
-            row.roomName()
+            row.roomName(),
+            row.meetingRoomId()
         ),
 
-        row.sessionStatus()
+        row.sessionStatus(),
+        row.runtimeSessionId()
     );
   }
 }

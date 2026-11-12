@@ -2,7 +2,7 @@ package org.ptit.meeting.modules.timetable.repository;
 
 import java.util.List;
 import java.util.Optional;
-import org.ptit.meeting.modules.timetable.entity.Room;
+import org.ptit.meeting.modules.meeting.entity.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

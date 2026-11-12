@@ -26,7 +26,7 @@ import org.ptit.meeting.modules.meeting.dto.request.MeetingRecordingCreateReques
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRecordingResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRecordingUploadPartResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingRecording;
-import org.ptit.meeting.modules.meeting.entity.MeetingRuntimeSession;
+import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.mapper.MeetingRecordingMapper;
 import org.ptit.meeting.modules.meeting.repository.MeetingRecordingRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
@@ -235,8 +235,8 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    requireViewAccess(runtimeSession.getId(), runtimeSession.getMeetingRoomId(), currentUserId);
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    requireViewAccess(runtimeSession.getPublicId(), runtimeSession.getMeetingRoomId(), currentUserId);
     return recordingRepository.findAllByRuntimeSessionIdOrderByCreatedAtDesc(runtimeSessionId)
         .stream()
         .map(this::toResponse)
@@ -278,13 +278,13 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
 
   private PreparedStart prepareStart(String runtimeSessionId, Long currentUserId) {
     requireStorageConfiguration();
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    moderationService.requireNotBanned(runtimeSession.getId(), currentUserId);
-    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
+    moderationService.requireNotBanned(runtimeSession.getPublicId(), currentUserId);
+    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_NOT_ACTIVE,
           runtimeSessionId
@@ -297,12 +297,12 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
     String recordingId = UUID.randomUUID().toString();
     return new PreparedStart(
         recordingId,
-        runtimeSession.getId(),
+        runtimeSession.getPublicId(),
         runtimeSession.getMeetingRoomId(),
         runtimeSession.getProviderRoomName(),
         buildObjectKey(
             runtimeSession.getMeetingRoomId(),
-            runtimeSession.getId(),
+            runtimeSession.getPublicId(),
             recordingId
         )
     );
@@ -314,18 +314,18 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
       String uploadId,
       Long currentUserId
   ) {
-    MeetingRuntimeSession runtimeSession = findRuntimeSession(prepared.runtimeSessionId());
+    MeetingSession runtimeSession = findRuntimeSession(prepared.runtimeSessionId());
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    if (runtimeSession.getStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
+    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
       throw BusinessException.invalidInput(
           MeetingErrorConstants.RUNTIME_SESSION_NOT_ACTIVE,
-          runtimeSession.getId()
+          runtimeSession.getPublicId()
       );
     }
-    if (recordingRepository.findByActiveSlot(runtimeSession.getId()).isPresent()) {
+    if (recordingRepository.findByActiveSlot(runtimeSession.getPublicId()).isPresent()) {
       throw BusinessException.existed(MeetingErrorConstants.RECORDING_ALREADY_ACTIVE);
     }
     MeetingRecording recording = new MeetingRecording(
@@ -386,11 +386,11 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
     moderationService.requireNotBanned(runtimeSessionId, currentUserId);
   }
 
-  private MeetingRuntimeSession findRuntimeSession(String runtimeSessionId) {
+  private MeetingSession findRuntimeSession(String runtimeSessionId) {
     if (!hasText(runtimeSessionId)) {
       throw BusinessException.notExisted(MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND);
     }
-    return runtimeSessionRepository.findById(runtimeSessionId)
+    return runtimeSessionRepository.findByPublicId(runtimeSessionId)
         .orElseThrow(() -> BusinessException.notExisted(
             MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND,
             runtimeSessionId
@@ -496,7 +496,7 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
   }
 
   private void broadcast(MeetingRecordingResponse response) {
-    runtimeSessionRepository.findById(response.runtimeSessionId())
+    runtimeSessionRepository.findByPublicId(response.runtimeSessionId())
         .ifPresent(session -> broadcast(session.getProviderRoomName(), response));
   }
 

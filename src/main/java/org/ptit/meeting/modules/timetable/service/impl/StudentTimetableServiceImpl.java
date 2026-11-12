@@ -10,7 +10,7 @@ import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
-import org.ptit.meeting.modules.timetable.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentOnlineScheduleRow;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentScheduleTimeRow;
 import org.ptit.meeting.modules.timetable.dto.response.StudentSemesterResponse;

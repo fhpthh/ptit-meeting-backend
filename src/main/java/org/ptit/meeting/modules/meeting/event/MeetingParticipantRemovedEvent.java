@@ -1,6 +1,6 @@
 package org.ptit.meeting.modules.meeting.event;
 
-public record MeetingParticipantBannedEvent(
+public record MeetingParticipantRemovedEvent(
     String providerRoomName,
     String participantIdentity
 ) {
