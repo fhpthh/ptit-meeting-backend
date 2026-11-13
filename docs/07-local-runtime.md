@@ -157,3 +157,28 @@ dữ liệu cần giữ vì các chế độ đó có thể làm mất bảng/d�
 Nếu `meeting_recordings` đã được tạo theo contract Egress cũ, chạy một lần
 `src/main/resources/db/sql/migrate_meeting_recording_browser_upload.sql`. Database mới không cần chạy file
 này vì Hibernate tạo bảng trực tiếp từ entity hiện tại.
+
+## 8. LiveKit media subscriptions và lượt trình chiếu
+
+Frontend kết nối với `autoSubscribe: false`, chỉ nhận các camera có ô đang hiển thị.
+Camera dùng simulcast, capture tối đa 720p/15fps; micro dùng Opus speech 24 Kbps với
+DTX/RED. Các micro được phép publish vẫn được nhận độc lập với số ô camera; thay đổi
+này không thêm workflow duyệt nhóm micro hoặc tự cắt audio theo người đang hiển thị.
+
+Token join không cấp quyền publish `screen_share`/`screen_share_audio` mặc định.
+`canShareScreen` trong join response và participant metadata biểu diễn quyền **xin lượt**.
+Sau khi người dùng chọn nguồn capture, frontend gọi
+`POST /api/v1/meeting-runtime-sessions/{id}/screen-share?participantSid={sid}`.
+Service kiểm tra membership, ban, trạng thái phiên, setting và connection SID hiện tại,
+khóa bản ghi phiên bằng pessimistic write rồi kiểm tra quyền publish hiện tại trên LiveKit.
+Chỉ một connection được cấp screen sources; request tranh lượt nhận
+`error.meeting.screen-share.busy`. Frontend chờ sự kiện quyền rồi mới publish track.
+
+Khi dừng hoặc publish thất bại, frontend gọi `DELETE` cùng đường dẫn/query để thu hồi
+screen sources. SID ngăn cleanup của kết nối cũ ảnh hưởng kết nối mới. Khi connection
+rời hẳn LiveKit, quyền gắn với connection biến mất. Admission và reconciliation cũng
+giữ tối đa một người có screen sources. Không thêm bảng, field DB, Redis lock hay heartbeat.
+Triển khai BE/FE cùng nhau và vào lại phòng để nhận token mới; không cần migration DB.
+
+Ngoại lệ kiểm tra cho thay đổi này theo yêu cầu người dùng: không tạo/chạy test, không
+chạy Docker; dùng Maven compile bỏ test và các kiểm tra format/type/build frontend tại máy local.

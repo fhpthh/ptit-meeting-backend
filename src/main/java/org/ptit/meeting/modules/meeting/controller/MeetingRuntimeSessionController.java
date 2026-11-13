@@ -10,10 +10,12 @@ import org.ptit.meeting.modules.meeting.service.MeetingAttendanceService;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -57,6 +59,26 @@ public class MeetingRuntimeSessionController {
       @AuthenticationPrincipal(expression = "userId") Long currentUserId
   ) {
     return BaseResponse.success(joinService.join(runtimeSessionId, currentUserId));
+  }
+
+  @PostMapping("/{runtimeSessionId}/screen-share")
+  public BaseResponse<Void> acquireScreenShare(
+      @PathVariable String runtimeSessionId,
+      @RequestParam String participantSid,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    joinService.acquireScreenShare(runtimeSessionId, participantSid, currentUserId);
+    return BaseResponse.success((Void) null);
+  }
+
+  @DeleteMapping("/{runtimeSessionId}/screen-share")
+  public BaseResponse<Void> releaseScreenShare(
+      @PathVariable String runtimeSessionId,
+      @RequestParam String participantSid,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    joinService.releaseScreenShare(runtimeSessionId, participantSid, currentUserId);
+    return BaseResponse.success((Void) null);
   }
 
   @PostMapping("/{runtimeSessionId}/end")
