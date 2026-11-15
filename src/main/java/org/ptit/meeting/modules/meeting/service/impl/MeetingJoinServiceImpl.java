@@ -29,13 +29,17 @@ import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoomSetting;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.entity.Room;
+import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
+import org.ptit.meeting.modules.meeting.service.MeetingHostPresenceService;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
+import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
 import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -54,6 +58,9 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private final ObjectMapper objectMapper;
   private final LiveKitGateway liveKitGateway;
   private final TransactionTemplate transactionTemplate;
+  private final ApplicationEventPublisher eventPublisher;
+  private final MeetingRuntimeSessionService runtimeSessionService;
+  private final MeetingHostPresenceService hostPresenceService;
 
   @Override
   @Transactional
@@ -200,7 +207,14 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     MeetingSession session = findRuntimeSessionForUpdate(runtimeSessionId);
     Room room = findRoom(session.getMeetingRoomId());
     String identity = "user-" + userId;
-    if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE || room.getStatus() != RoomStatus.ACTIVE) {
+    if (session.getRuntimeStatus() == MeetingRuntimeSessionStatus.ENDED) {
+      // Persist the retry before attempting to close a room recreated by an old token.
+      session.setCleanupPending(true);
+      eventPublisher.publishEvent(new MeetingRuntimeSessionEndedEvent(runtimeSessionId));
+      return false;
+    }
+    if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE
+        || room.getStatus() != RoomStatus.ACTIVE) {
       liveKitGateway.removeParticipant(session.getProviderRoomName(), identity);
       return false;
     }
@@ -208,7 +222,9 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
     LiveKitParticipantSnapshot participant = participants.stream()
         .filter(value -> value.identity().equals(identity)).findFirst().orElse(null);
-    if (participant == null) return false;
+    if (participant == null) {
+      return false;
+    }
     boolean screenShareAcquired = participant.publishSources().contains("screen_share")
         && participants.stream().noneMatch(value -> !value.sid().equals(participant.sid())
             && value.publishSources().contains("screen_share"));
@@ -220,6 +236,10 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
       return false;
     }
     updateAccessIfChanged(participant, grant);
+    if (!session.getScheduledEndAt().isAfter(Instant.now())
+        && authorizationService.getRuntimeSessionHostIds(room.getPublicId()).contains(userId)) {
+      hostPresenceService.markPresent(runtimeSessionId);
+    }
     return true;
   }
 
@@ -228,7 +248,8 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     Room room = findRoom(roomId);
     MeetingRoomSetting setting = roomService.getSetting(roomId);
     for (MeetingSession session : runtimeSessionRepository.findAllByRoomIdAndStatus(room.getId(), SessionStatus.LIVE)) {
-      transactionTemplate.executeWithoutResult(status -> synchronizeSession(session, room, setting));
+      List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
+      transactionTemplate.executeWithoutResult(status -> synchronizeSession(session, room, setting, participants));
     }
   }
 
@@ -236,22 +257,59 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   public void reconcileActiveSessions() {
     for (MeetingSession session : runtimeSessionRepository.findAllByStatus(SessionStatus.LIVE)) {
       try {
-        // Commit each session separately so one reconciliation does not lock every active class.
+        // Share one LiveKit snapshot between overtime checks and permission reconciliation.
+        String observedHostState = readOvertimeHostState(session);
+        List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
+        reconcileOvertime(session, observedHostState, participants);
         transactionTemplate.executeWithoutResult(status -> {
           Room room = session.getRoom();
-          synchronizeSession(session, room, roomService.getSetting(room.getPublicId()));
+          synchronizeSession(session, room, roomService.getSetting(room.getPublicId()), participants);
         });
-      } catch (LiveKitIntegrationException exception) {
-        log.warn("Unable to reconcile LiveKit access: runtimeSessionId={}", session.getPublicId());
+      } catch (RuntimeException exception) {
+        log.warn("Unable to reconcile LiveKit session; will retry: runtimeSessionId={}",
+            session.getPublicId(), exception);
       }
     }
   }
 
-  private void synchronizeSession(MeetingSession session, Room room, MeetingRoomSetting setting) {
-    findRuntimeSessionForUpdate(session.getPublicId());
+  private String readOvertimeHostState(MeetingSession session) {
+    if (session.getScheduledEndAt().isAfter(Instant.now())) {
+      return null;
+    }
+    try {
+      return hostPresenceService.getState(session.getPublicId());
+    } catch (RuntimeException exception) {
+      log.warn("Unable to read host presence; access reconciliation will continue: runtimeSessionId={}",
+          session.getPublicId(), exception);
+      return null;
+    }
+  }
+
+  private void reconcileOvertime(MeetingSession session, String observedHostState,
+      List<LiveKitParticipantSnapshot> participants) {
+    // Null means unavailable/not due; an empty Redis state is a valid first observation.
+    if (observedHostState == null) {
+      return;
+    }
+    try {
+      runtimeSessionService.reconcileOvertime(
+          session.getPublicId(), session.getVersion(), observedHostState, participants
+      );
+    } catch (RuntimeException exception) {
+      log.warn("Unable to reconcile overtime; access reconciliation will continue: runtimeSessionId={}",
+          session.getPublicId(), exception);
+    }
+  }
+
+  private void synchronizeSession(MeetingSession session, Room room, MeetingRoomSetting setting,
+      List<LiveKitParticipantSnapshot> participants) {
+    session = findRuntimeSessionForUpdate(session.getPublicId());
+    if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
+      return;
+    }
     int admitted = 0;
     boolean screenShareAssigned = false;
-    for (LiveKitParticipantSnapshot participant : orderedParticipants(session)) {
+    for (LiveKitParticipantSnapshot participant : participants) {
       Long userId = userIdFromIdentity(participant.identity());
       LiveKitJoinGrant grant = userId == null || room.getStatus() != RoomStatus.ACTIVE
           ? null : currentGrant(session, room, setting, userId,

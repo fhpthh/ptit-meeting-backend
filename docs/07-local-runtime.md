@@ -182,3 +182,88 @@ Triển khai BE/FE cùng nhau và vào lại phòng để nhận token mới; kh
 
 Ngoại lệ kiểm tra cho thay đổi này theo yêu cầu người dùng: không tạo/chạy test, không
 chạy Docker; dùng Maven compile bỏ test và các kiểm tra format/type/build frontend tại máy local.
+
+## 9. Kết thúc phiên học và dọn phòng
+
+`POST /api/v1/meeting-runtime-sessions/{id}/end` dành cho OWNER/HOST, kết thúc phiên
+ACTIVE và có thể gọi lại khi đã ENDED. Start/end/cancel khóa bản ghi phiên để tránh
+tranh chấp với nhau và với lượt quét quá hạn. Phiên SCHEDULED quá giờ không được bắt
+đầu; phiên ACTIVE được vào lại, trình chiếu và ghi hình trong thời gian dạy thêm.
+
+Một scheduler chạy lượt đầu khi được khởi động, sau đó nghỉ 30 giây sau khi lượt trước
+hoàn thành. Không gọi thêm bằng ApplicationReadyEvent. Scheduler dọn phiên chờ quá
+giờ thành CANCELLED, thử lại cleanup và đồng bộ các phiên LIVE. Mỗi phòng LIVE lấy
+một danh sách LiveKit dùng chung cho đồng bộ quyền và kiểm tra dạy thêm; không thêm
+lượt gọi LiveKit riêng cho mỗi sinh viên hoặc scheduler thứ hai. Call timeout SDK là
+10 giây. Lỗi lấy danh sách không được xem là phòng trống và không quyết định kết thúc.
+
+Sau scheduled_end, giảng viên còn trong phòng thì phiên tiếp tục ACTIVE, kể cả sau
+mốc scheduled_end + 1 giờ. Vắng giảng viên ít nhất 2 phút: nếu phòng trống thì kết
+thúc; nếu còn sinh viên thì chỉ kết thúc khi đã qua mốc scheduled_end + 1 giờ. Ví dụ
+lịch hết 10:00, giảng viên rời 11:20 thì kết thúc khoảng 11:22 ở lượt quét kế tiếp.
+Trước scheduled_end không tự kết thúc vì phòng trống. Cả kết thúc thủ công và tự
+động đều ghi actual_end bằng thời điểm kết thúc thực tế, không ghi đè scheduled_end.
+
+Lớp gắn TKB xác định giảng viên bằng phân công hiện hành ở ClassSection; sinh viên
+có role HOST không giữ lớp mở mãi. Phòng độc lập dùng thành viên OWNER/HOST còn hiệu
+lực. Không dựa vào tên hoặc metadata role do client cung cấp. Redis giữ trạng thái
+hiện diện trong một key `mtg:ha:{sessionId}`, TTL 24 giờ. Giá trị timestamp milliseconds
+là lần đầu quan sát giảng viên vắng sau giờ; các lượt quét sau giữ nguyên mốc này.
+Khi quan sát giảng viên có mặt hoặc webhook admission hợp lệ sau giờ, ghi marker
+`p:{UUID}` mới để reset khoảng đệm và vô hiệu hóa snapshot cũ. Đọc trạng thái Redis
+trước khi lấy danh sách LiveKit; Lua chỉ ghi/đọc mốc vắng nếu trạng thái vẫn khớp.
+Do đó webhook vào lại vẫn vô hiệu hóa snapshot cũ dù không đổi `row_version` trong DB.
+Phiên kết thúc xóa key trong cleanup sau commit. Backend restart dùng tiếp key còn
+tồn tại; Redis mất key thì bắt đầu chờ lại 2 phút. Redis lỗi không được xem là đã
+đủ khoảng đệm: bỏ qua xét dạy thêm và thử lại ở lượt quét tiếp theo. Đồng bộ quyền
+LiveKit vẫn tiếp tục bằng cùng danh sách participant dù đọc Redis hoặc xét dạy thêm lỗi.
+Kiểm tra version và khóa lại phiên trước khi đổi trạng thái. Việc lấy danh sách
+LiveKit diễn ra trước transaction kiểm tra dạy thêm, không giữ khóa phiên khi chờ mạng.
+
+`meeting_sessions.cleanup_pending` lưu công việc dọn còn dang dở, không
+trả trường này qua DTO. Chuyển ENDED và đánh dấu pending trong cùng transaction.
+Sau commit, service xóa phòng LiveKit trước, rồi dọn chat/giơ tay; chỉ bỏ cờ sau khi
+tất cả thành công, kể cả xóa key hiện diện Redis. Lỗi được log và lượt quét sau thử
+lại. LiveKit trả 404 được xem là đã xóa. Các bước có thể chạy lại sau crash, không
+xóa điểm danh hoặc bản ghi.
+Webhook người vào phiên ENDED bằng token cũ đánh dấu pending và kích hoạt lại dọn
+phòng sau commit; không xem DeleteRoom là thu hồi token self-hosted.
+
+Cleanup giữ khóa phiên trong lúc dọn để tuần tự hóa với webhook admission muộn:
+lượt dọn cũ không được xóa cờ pending của một yêu cầu dọn mới. Đây là lựa chọn giữ
+tính đúng đắn của retry; không đưa các lời gọi cleanup ra ngoài khóa nếu chưa có
+cơ chế nhận biết từng lượt dọn. Việc lấy danh sách LiveKit để xét dạy thêm vẫn ở ngoài khóa.
+
+Local `ddl-auto=update` tự thêm cột/index khi backend khởi động. Môi trường quản lý
+schema thủ công chạy một lần `src/main/resources/db/sql/migrate_meeting_session_cleanup.sql`
+trước khi triển khai; script cũng đánh dấu các phiên ENDED cũ để dọn lại. Không chạy
+script thêm cột sau khi Hibernate đã tự thêm cùng cột/index. Hibernate chỉ cập nhật
+schema, không tự chạy câu UPDATE đánh dấu phiên ENDED cũ; nếu cần dọn các phiên này
+thì chạy riêng câu UPDATE trong script. Mốc vắng 2 phút chỉ lưu Redis, không thêm
+cột hoặc migration dạy thêm. Nếu DB đã có cột mốc vắng từ bản triển khai trước,
+cột đó không còn được mapping/sử dụng; Hibernate update không tự xóa cột cũ.
+Không thêm field kỹ thuật vào DTO.
+
+FE OWNER/HOST có lựa chọn Rời phòng hoặc Kết thúc cho tất cả, dùng API end hiện có.
+Kết thúc thủ công đợi upload bản ghi trên máy người bấm; các máy ghi khác hoàn tất
+upload khi disconnect/unmount, API upload/complete vẫn cho phép sau ENDED với đúng
+chủ bản ghi và quyền hiện hành. Đã bỏ polling trong phòng sau giờ kết thúc: client
+đang họp dựa vào LiveKit disconnect rồi refetch
+trạng thái, không polling mỗi 5 giây trong suốt thời gian dạy thêm. Focus refresh và
+kiểm tra phiên khi vào lại vẫn dùng API hiện có. Terminal status xóa marker reload.
+Link vào lớp trên TKB vẫn hiện nếu session LIVE dù đã qua giờ dự kiến.
+
+Theo yêu cầu người dùng, không giữ các file test bổ sung cho thay đổi chuyển mốc
+vắng sang Redis. Đây là ngoại lệ có chủ đích với quy tắc bổ sung test trong
+`docs/03-implementation-rules.md`.
+
+TKB tạo/cập nhật entity session dùng chung qua luồng import hiện có. Field
+`scheduleOccurrenceId` trên entity/response được giữ để tương thích dữ liệu và API.
+API ban lưu lệnh cấm, loại participant sau commit, chặn token mới bằng
+`requireNotBanned`, và kiểm tra lại token cũ qua webhook admission cùng đối soát
+định kỳ. Ban chỉ áp dụng cho runtime session được chỉ định.
+Kiểm tra lớp ACTIVE và giảng viên được gộp trong một truy vấn khi phân quyền thành viên;
+vẫn kiểm tra ghi danh, ban và trạng thái tài khoản theo quyền hiện hành.
+Theo yêu cầu không bổ sung lại test; đợt clean kiểm tra bằng Maven compile bỏ test,
+rà soát call site và khởi động ứng dụng với H2 để xác nhận khởi tạo JPA/repository.
+Các kiểm tra này không xác nhận kết nối LiveKit/Redis thực tế.

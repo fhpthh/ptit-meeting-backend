@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.meeting.service;
 
+import java.util.Set;
 import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 
 public interface MeetingAuthorizationService {
@@ -9,4 +10,6 @@ public interface MeetingAuthorizationService {
     void requireRoomOwner(String roomId, Long userId);
 
     void requireRuntimeSessionHost(String roomId, Long userId);
+
+    Set<Long> getRuntimeSessionHostIds(String roomId);
 }

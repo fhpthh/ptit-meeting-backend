@@ -314,7 +314,11 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
       String uploadId,
       Long currentUserId
   ) {
-    MeetingSession runtimeSession = findRuntimeSession(prepared.runtimeSessionId());
+    MeetingSession runtimeSession = runtimeSessionRepository
+        .findByPublicIdForUpdate(prepared.runtimeSessionId())
+        .orElseThrow(() -> BusinessException.notExisted(
+            MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND, prepared.runtimeSessionId()
+        ));
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId

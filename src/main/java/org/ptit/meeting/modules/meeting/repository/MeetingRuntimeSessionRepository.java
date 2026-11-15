@@ -1,6 +1,7 @@
 package org.ptit.meeting.modules.meeting.repository;
 
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
@@ -22,15 +23,22 @@ public interface MeetingRuntimeSessionRepository
   Optional<MeetingSession> findByPublicIdForUpdate(@Param("publicId") String publicId);
 
   @EntityGraph(attributePaths = "room")
-  Optional<MeetingSession> findByScheduleOccurrenceId(String scheduleOccurrenceId);
-
-  @EntityGraph(attributePaths = "room")
   Optional<MeetingSession> findByProviderRoomName(String providerRoomName);
 
   List<MeetingSession> findAllByRoomIdAndStatus(Long roomId, SessionStatus status);
 
   @EntityGraph(attributePaths = "room")
   List<MeetingSession> findAllByStatus(SessionStatus status);
+
+  @Query("select session.publicId from MeetingSession session "
+      + "where session.status = :status and session.scheduledEnd <= :now")
+  List<String> findExpiredSessionIds(
+      @Param("status") SessionStatus status,
+      @Param("now") LocalDateTime now
+  );
+
+  @Query("select session.publicId from MeetingSession session where session.cleanupPending = true")
+  List<String> findPendingCleanupIds();
 
   @EntityGraph(attributePaths = "room")
   List<MeetingSession> findAllByRoom_PublicIdOrderByScheduledStartAsc(

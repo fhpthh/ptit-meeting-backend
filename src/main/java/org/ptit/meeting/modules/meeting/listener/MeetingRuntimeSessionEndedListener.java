@@ -2,11 +2,8 @@ package org.ptit.meeting.modules.meeting.listener;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.ptit.meeting.integration.livekit.LiveKitGateway;
-import org.ptit.meeting.integration.livekit.LiveKitIntegrationException;
 import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
-import org.ptit.meeting.modules.meeting.service.MeetingChatService;
-import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
+import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -16,21 +13,17 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class MeetingRuntimeSessionEndedListener {
 
-  private final LiveKitGateway liveKitGateway;
-  private final MeetingChatService chatService;
-  private final MeetingHandRaiseService handRaiseService;
+  private final MeetingRuntimeSessionService runtimeSessionService;
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void cleanupRuntimeSession(MeetingRuntimeSessionEndedEvent event) {
-    chatService.clearHistory(event.runtimeSessionId());
-    handRaiseService.clear(event.runtimeSessionId());
     try {
-      liveKitGateway.deleteRoom(event.providerRoomName());
-    } catch (LiveKitIntegrationException exception) {
+      runtimeSessionService.cleanupEndedSession(event.runtimeSessionId());
+    } catch (RuntimeException exception) {
       log.warn(
-          "Unable to close LiveKit room after ending runtime session: runtimeSessionId={}, roomName={}",
+          "Meeting cleanup will retry after committed session end: runtimeSessionId={}",
           event.runtimeSessionId(),
-          event.providerRoomName()
+          exception
       );
     }
   }

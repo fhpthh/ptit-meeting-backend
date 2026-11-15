@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.meeting.service.impl;
 
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
@@ -9,6 +10,7 @@ import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
+import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,16 @@ public class MeetingAuthorizationServiceImpl implements MeetingAuthorizationServ
         }
     }
 
+    @Override
+    public Set<Long> getRuntimeSessionHostIds(String roomId) {
+        Room room = roomRepository.findByPublicId(roomId)
+                .orElseThrow(() -> BusinessException.notExisted(MeetingErrorConstants.ROOM_NOT_FOUND));
+        if (room.getClassSectionId() != null) {
+            return roomRepository.findClassLecturerId(roomId).map(Set::of).orElse(Set.of());
+        }
+        return Set.copyOf(memberRepository.findActiveHostUserIds(roomId));
+    }
+
     private ClassEnrollment findActiveMember(String roomId, Long userId) {
         if (roomId == null || roomId.isBlank() || userId == null || userId <= 0) {
             throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
@@ -50,10 +62,9 @@ public class MeetingAuthorizationServiceImpl implements MeetingAuthorizationServ
         Room room = roomRepository.findByPublicId(roomId)
                 .orElseThrow(() -> BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED));
         if (room.getClassSectionId() != null) {
-            if (!roomRepository.hasActiveClassSection(roomId)) {
-                throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
-            }
-            if (roomRepository.findClassLecturerId(roomId).filter(userId::equals).isPresent()) {
+            ClassSection section = roomRepository.findActiveClassSection(roomId)
+                    .orElseThrow(() -> BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED));
+            if (userId.equals(section.getLecturerId())) {
                 return ClassEnrollment.builder()
                         .classSectionId(room.getClassSectionId())
                         .userId(userId)

@@ -178,24 +178,6 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
     }
   }
 
-  @Override
-  @Transactional(readOnly = true)
-  public boolean enforceBan(String runtimeSessionId, Long userId) {
-    if (!banRepository.existsByRuntimeSessionIdAndUserIdAndRevokedAtIsNull(
-        runtimeSessionId,
-        userId
-    )) {
-      return false;
-    }
-
-    MeetingSession runtimeSession = findSession(runtimeSessionId);
-    callProvider(() -> liveKitGateway.removeParticipant(
-        runtimeSession.getProviderRoomName(),
-        participantIdentity(userId)
-    ));
-    return true;
-  }
-
   private MeetingSession requireActiveSession(String runtimeSessionId) {
     MeetingSession runtimeSession = findSession(runtimeSessionId);
     if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {

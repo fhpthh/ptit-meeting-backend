@@ -4,7 +4,9 @@ import io.livekit.server.LiveKitAPI;
 import io.livekit.server.WebhookReceiver;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.List;
+import okhttp3.OkHttpClient;
 import org.ptit.meeting.config.LiveKitProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -17,10 +19,17 @@ public class LiveKitConfiguration {
   @ConditionalOnProperty(prefix = "application.livekit", name = "enabled", havingValue = "true")
   public LiveKitAPI liveKitApi(LiveKitProperties properties) {
     validateEnabledConfiguration(properties);
+    OkHttpClient httpClient = new OkHttpClient.Builder()
+        .connectTimeout(Duration.ofSeconds(3))
+        .readTimeout(Duration.ofSeconds(5))
+        .writeTimeout(Duration.ofSeconds(5))
+        .callTimeout(Duration.ofSeconds(10))
+        .build();
     return LiveKitAPI.createClient(
         properties.getApiUrl(),
         properties.getApiKey(),
-        properties.getApiSecret()
+        properties.getApiSecret(),
+        () -> httpClient
     );
   }
 

@@ -40,6 +40,4 @@ public interface MeetingModerationService {
   );
 
   void requireNotBanned(String runtimeSessionId, Long userId);
-
-  boolean enforceBan(String runtimeSessionId, Long userId);
 }

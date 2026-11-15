@@ -1,45 +1,62 @@
 package org.ptit.meeting.modules.meeting.service.impl;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
+import org.ptit.meeting.integration.livekit.LiveKitGateway;
+import org.ptit.meeting.integration.livekit.dto.LiveKitParticipantSnapshot;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRuntimeSessionCreateRequest;
-import org.ptit.meeting.modules.meeting.dto.request.MeetingRuntimeSessionScheduleSyncRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRuntimeSessionResponse;
-import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
+import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.mapper.MeetingRuntimeSessionMapper;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
+import org.ptit.meeting.modules.meeting.service.MeetingChatService;
+import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
+import org.ptit.meeting.modules.meeting.service.MeetingHostPresenceService;
 import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.UUID;
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionService {
 
   private static final int TITLE_MAX_LENGTH = 150;
-  private static final int SCHEDULE_OCCURRENCE_MAX_LENGTH = 100;
+  private static final Duration STUDENT_OVERTIME_LIMIT = Duration.ofHours(1);
 
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final MeetingRoomRepository roomRepository;
   private final MeetingAuthorizationService authorizationService;
   private final MeetingRuntimeSessionMapper runtimeSessionMapper;
   private final ApplicationEventPublisher eventPublisher;
+  private final LiveKitGateway liveKitGateway;
+  private final MeetingChatService chatService;
+  private final MeetingHandRaiseService handRaiseService;
+  private final MeetingHostPresenceService hostPresenceService;
+  private final PlatformTransactionManager transactionManager;
 
   @Override
   @Transactional
@@ -67,44 +84,6 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
         currentUserId
     );
     return runtimeSessionMapper.toResponse(runtimeSessionRepository.saveAndFlush(runtimeSession));
-  }
-
-  @Override
-  @Transactional
-  public MeetingRuntimeSessionResponse syncFromSchedule(
-      MeetingRuntimeSessionScheduleSyncRequest request
-  ) {
-    if (request == null) {
-      throw BusinessException.invalidInput(
-          MeetingErrorConstants.RUNTIME_SESSION_SCHEDULE_INVALID
-      );
-    }
-
-    Room room = findRoom(request.meetingRoomId());
-    authorizationService.requireRuntimeSessionHost(room.getPublicId(), request.createdByUserId());
-    requireActiveRoom(room);
-
-    String occurrenceId = normalizeScheduleOccurrenceId(request.scheduleOccurrenceId());
-    String title = normalizeTitle(request.title());
-    validateScheduleTime(request.scheduledStartAt(), request.scheduledEndAt());
-
-    Optional<MeetingSession> existing = runtimeSessionRepository.findByScheduleOccurrenceId(
-        occurrenceId
-    );
-    if (existing.isPresent()) {
-      return synchronize(existing.get(), room.getPublicId(), request, title);
-    }
-
-    MeetingSession runtimeSession = new MeetingSession(
-        room,
-        title,
-        generateProviderRoomName(),
-        occurrenceId,
-        request.scheduledStartAt(),
-        request.scheduledEndAt(),
-        request.createdByUserId()
-    );
-    return runtimeSessionMapper.toResponse(saveScheduleSync(runtimeSession));
   }
 
   @Override
@@ -137,8 +116,13 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     requireActiveRoom(room);
     requireStatus(runtimeSession, MeetingRuntimeSessionStatus.SCHEDULED);
 
+    Instant now = Instant.now();
+    if (!runtimeSession.getScheduledEndAt().isAfter(now)) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.RUNTIME_SESSION_EXPIRED);
+    }
+
     runtimeSession.setRuntimeStatus(MeetingRuntimeSessionStatus.ACTIVE);
-    runtimeSession.setActualStartAt(Instant.now());
+    runtimeSession.setActualStartAt(now);
     return runtimeSessionMapper.toResponse(saveTransition(runtimeSession));
   }
 
@@ -149,16 +133,15 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
         runtimeSessionId,
         currentUserId
     );
+    if (runtimeSession.getRuntimeStatus() == MeetingRuntimeSessionStatus.ENDED) {
+      if (runtimeSession.isCleanupPending()) {
+        eventPublisher.publishEvent(new MeetingRuntimeSessionEndedEvent(runtimeSessionId));
+      }
+      return runtimeSessionMapper.toResponse(runtimeSession);
+    }
     requireStatus(runtimeSession, MeetingRuntimeSessionStatus.ACTIVE);
-
-    runtimeSession.setRuntimeStatus(MeetingRuntimeSessionStatus.ENDED);
-    runtimeSession.setActualEndAt(Instant.now());
-    MeetingSession endedRuntimeSession = saveTransition(runtimeSession);
-    eventPublisher.publishEvent(new MeetingRuntimeSessionEndedEvent(
-        endedRuntimeSession.getPublicId(),
-        endedRuntimeSession.getProviderRoomName()
-    ));
-    return runtimeSessionMapper.toResponse(endedRuntimeSession);
+    finish(runtimeSession, Instant.now());
+    return runtimeSessionMapper.toResponse(runtimeSession);
   }
 
   @Override
@@ -174,41 +157,102 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     return runtimeSessionMapper.toResponse(saveTransition(runtimeSession));
   }
 
-  private MeetingRuntimeSessionResponse synchronize(
-      MeetingSession runtimeSession,
-      String roomId,
-      MeetingRuntimeSessionScheduleSyncRequest request,
-      String title
-  ) {
-    if (!runtimeSession.getMeetingRoomId().equals(roomId)) {
-      throw BusinessException.existed(
-          MeetingErrorConstants.RUNTIME_SESSION_SCHEDULE_CONFLICT,
-          request.scheduleOccurrenceId()
-      );
+  @Override
+  public void reconcileSessions() {
+    Instant now = Instant.now();
+    List<String> expiredIds = runtimeSessionRepository.findExpiredSessionIds(
+        SessionStatus.SCHEDULED,
+        LocalDateTime.ofInstant(now, ZoneId.of("Asia/Ho_Chi_Minh"))
+    );
+    for (String sessionId : expiredIds) {
+      try {
+        newTransaction().executeWithoutResult(status -> {
+          MeetingSession session = findRuntimeSessionForUpdate(sessionId);
+          if (session.getRuntimeStatus() == MeetingRuntimeSessionStatus.SCHEDULED
+              && !session.getScheduledEndAt().isAfter(now)) {
+            session.setRuntimeStatus(MeetingRuntimeSessionStatus.CANCELLED);
+            saveTransition(session);
+          }
+        });
+      } catch (RuntimeException exception) {
+        log.error("Unable to expire meeting session: runtimeSessionId={}", sessionId, exception);
+      }
     }
-    if (runtimeSession.getRuntimeStatus() != MeetingRuntimeSessionStatus.SCHEDULED) {
-      return runtimeSessionMapper.toResponse(runtimeSession);
+    for (String sessionId : runtimeSessionRepository.findPendingCleanupIds()) {
+      try {
+        cleanupEndedSession(sessionId);
+      } catch (RuntimeException exception) {
+        log.warn("Meeting cleanup will retry: runtimeSessionId={}", sessionId, exception);
+      }
     }
-
-    runtimeSession.setTitle(title);
-    runtimeSession.setScheduledStartAt(request.scheduledStartAt());
-    runtimeSession.setScheduledEndAt(request.scheduledEndAt());
-    return runtimeSessionMapper.toResponse(saveScheduleSync(runtimeSession));
   }
 
-  private MeetingSession saveScheduleSync(MeetingSession runtimeSession) {
-    try {
-      return runtimeSessionRepository.saveAndFlush(runtimeSession);
-    } catch (DataIntegrityViolationException exception) {
-      throw BusinessException.existed(
-          MeetingErrorConstants.RUNTIME_SESSION_SCHEDULE_CONFLICT,
-          runtimeSession.getScheduleOccurrenceId()
+  @Override
+  public void reconcileOvertime(
+      String runtimeSessionId,
+      Long observedVersion,
+      String observedHostState,
+      List<LiveKitParticipantSnapshot> participants
+  ) {
+    Set<String> identities = participants.stream()
+        .map(LiveKitParticipantSnapshot::identity).collect(Collectors.toSet());
+    // LiveKit was queried before this transaction; do not hold a row lock during that call.
+    newTransaction().executeWithoutResult(status -> {
+      MeetingSession session = findRuntimeSessionForUpdate(runtimeSessionId);
+      Instant now = Instant.now();
+      if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE
+          || session.getScheduledEndAt().isAfter(now)
+          || !Objects.equals(session.getVersion(), observedVersion)) {
+        return;
+      }
+      boolean hostPresent = authorizationService.getRuntimeSessionHostIds(session.getMeetingRoomId())
+          .stream().anyMatch(userId -> identities.contains("user-" + userId));
+      if (hostPresent) {
+        hostPresenceService.markPresent(runtimeSessionId);
+        return;
+      }
+      boolean gracePassed = hostPresenceService.hasReconnectGracePassed(
+          runtimeSessionId, observedHostState, now
       );
-    } catch (OptimisticLockingFailureException exception) {
-      throw BusinessException.invalidInput(
-          MeetingErrorConstants.RUNTIME_SESSION_CONCURRENT_UPDATE
-      );
-    }
+      boolean overtimePassed = !now.isBefore(session.getScheduledEndAt().plus(STUDENT_OVERTIME_LIMIT));
+      if (gracePassed && (participants.isEmpty() || overtimePassed)) {
+        finish(session, now);
+      }
+    });
+  }
+
+  @Override
+  public void cleanupEndedSession(String runtimeSessionId) {
+    // A separate transaction also works from an AFTER_COMMIT listener.
+    // Keep cleanup serialized with late admissions so a new retry cannot be cleared by an old cleanup.
+    newTransaction().executeWithoutResult(status -> {
+      MeetingSession session = findRuntimeSessionForUpdate(runtimeSessionId);
+      if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ENDED
+          || !session.isCleanupPending()) {
+        return;
+      }
+      // Stop media first; a Redis failure must not leave the call running.
+      liveKitGateway.deleteRoom(session.getProviderRoomName());
+      chatService.clearHistory(runtimeSessionId);
+      handRaiseService.clear(runtimeSessionId);
+      hostPresenceService.clear(runtimeSessionId);
+      session.setCleanupPending(false);
+      runtimeSessionRepository.saveAndFlush(session);
+    });
+  }
+
+  private void finish(MeetingSession session, Instant endedAt) {
+    session.setRuntimeStatus(MeetingRuntimeSessionStatus.ENDED);
+    session.setActualEndAt(endedAt);
+    session.setCleanupPending(true);
+    saveTransition(session);
+    eventPublisher.publishEvent(new MeetingRuntimeSessionEndedEvent(session.getPublicId()));
+  }
+
+  private TransactionTemplate newTransaction() {
+    TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+    transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    return transaction;
   }
 
   private MeetingSession saveTransition(MeetingSession runtimeSession) {
@@ -226,12 +270,19 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
+    MeetingSession runtimeSession = findRuntimeSessionForUpdate(runtimeSessionId);
     authorizationService.requireRuntimeSessionHost(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
     return runtimeSession;
+  }
+
+  private MeetingSession findRuntimeSessionForUpdate(String runtimeSessionId) {
+    return runtimeSessionRepository.findByPublicIdForUpdate(runtimeSessionId)
+        .orElseThrow(() -> BusinessException.notExisted(
+            MeetingErrorConstants.RUNTIME_SESSION_NOT_FOUND, runtimeSessionId
+        ));
   }
 
   private MeetingSession findRuntimeSession(String runtimeSessionId) {
@@ -282,17 +333,6 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
     return title.trim();
   }
 
-  private String normalizeScheduleOccurrenceId(String occurrenceId) {
-    if (occurrenceId == null
-        || occurrenceId.isBlank()
-        || occurrenceId.trim().length() > SCHEDULE_OCCURRENCE_MAX_LENGTH) {
-      throw BusinessException.invalidInput(
-          MeetingErrorConstants.RUNTIME_SESSION_SCHEDULE_INVALID
-      );
-    }
-    return occurrenceId.trim();
-  }
-
   private void validateScheduleTime(Instant startAt, Instant endAt) {
     if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
       throw BusinessException.invalidInput(MeetingErrorConstants.RUNTIME_SESSION_TIME_INVALID);
@@ -301,6 +341,6 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
 
   private String generateProviderRoomName() {
     String suffix = UUID.randomUUID().toString().replace("-", "");
-    return "runtime-session-" + suffix.toLowerCase(Locale.ROOT);
+    return "runtime-session-" + suffix;
   }
 }

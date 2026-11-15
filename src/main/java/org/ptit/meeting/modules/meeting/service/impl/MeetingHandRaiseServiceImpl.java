@@ -173,10 +173,7 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
     try {
       redisTemplate.delete(List.of(orderKey(runtimeSessionId), detailsKey(runtimeSessionId)));
     } catch (DataAccessException exception) {
-      log.warn(
-          "Unable to clear meeting hand raises: runtimeSessionId={}",
-          runtimeSessionId
-      );
+      throw unavailable();
     }
   }
 
