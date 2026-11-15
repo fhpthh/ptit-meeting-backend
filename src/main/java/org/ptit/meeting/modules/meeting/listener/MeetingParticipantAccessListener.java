@@ -7,7 +7,6 @@ import org.ptit.meeting.integration.livekit.LiveKitIntegrationException;
 import org.ptit.meeting.modules.meeting.event.MeetingParticipantRemovedEvent;
 import org.ptit.meeting.modules.meeting.event.MeetingRoomAccessChangedEvent;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.stereotype.Component;
@@ -30,11 +29,6 @@ public class MeetingParticipantAccessListener {
     } catch (LiveKitIntegrationException exception) {
       log.warn("Unable to synchronize LiveKit access; reconciliation will retry: roomId={}", event.roomId());
     }
-  }
-
-  @Scheduled(initialDelay = 60_000, fixedDelay = 30_000)
-  public void reconcileAccess() {
-    joinService.reconcileActiveSessions();
   }
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

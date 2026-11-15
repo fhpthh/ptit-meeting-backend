@@ -94,8 +94,14 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
             ? Set.of("microphone", "camera", "screen_share", "screen_share_audio")
             : permission.getCanPublishSourcesList().stream()
                 .map(source -> source.name().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
-    return new LiveKitParticipantSnapshot(participant.getIdentity(), participant.getMetadata(),
-        participant.getJoinedAt(), permission.getCanSubscribe(), sources);
+    return new LiveKitParticipantSnapshot(
+        participant.getSid(),
+        participant.getIdentity(),
+        participant.getMetadata(),
+        participant.getJoinedAt(),
+        permission.getCanSubscribe(),
+        sources
+    );
   }
 
   @Override

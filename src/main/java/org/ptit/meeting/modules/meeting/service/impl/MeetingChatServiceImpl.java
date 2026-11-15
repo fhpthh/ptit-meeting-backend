@@ -190,10 +190,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
           idempotencyKey(runtimeSessionId)
       ));
     } catch (DataAccessException exception) {
-      log.warn(
-          "Unable to clear temporary meeting chat history: runtimeSessionId={}",
-          runtimeSessionId
-      );
+      throw chatUnavailable();
     }
   }
 

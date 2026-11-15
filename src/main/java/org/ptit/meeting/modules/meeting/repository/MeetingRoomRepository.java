@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.meeting.entity.Room;
+import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
@@ -21,10 +22,6 @@ public interface MeetingRoomRepository extends JpaRepository<Room, Long> {
     @Query("SELECT room FROM Room room WHERE room.publicId = :roomId")
     Optional<Room> findByPublicIdForUpdate(@Param("roomId") String roomId);
 
-    Optional<Room> findByCode(String code);
-
-    boolean existsByCode(String code);
-
     List<Room> findAllByPublicIdInAndStatusOrderByCreatedAtDesc(
             Collection<String> ids,
             RoomStatus status
@@ -39,12 +36,12 @@ public interface MeetingRoomRepository extends JpaRepository<Room, Long> {
     Optional<Long> findClassLecturerId(@Param("roomId") String roomId);
 
     @Query("""
-        SELECT COUNT(section) > 0 FROM Room room
+        SELECT section FROM Room room
         JOIN ClassSection section ON section.id = room.classSectionId
         WHERE room.publicId = :roomId
           AND section.status = org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus.ACTIVE
         """)
-    boolean hasActiveClassSection(@Param("roomId") String roomId);
+    Optional<ClassSection> findActiveClassSection(@Param("roomId") String roomId);
 
     @Query("""
         SELECT room FROM Room room

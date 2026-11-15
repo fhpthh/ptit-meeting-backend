@@ -5,13 +5,14 @@ package org.ptit.meeting.modules.meeting.constant;
  */
 public final class MeetingErrorConstants {
 
+  public static final String RUNTIME_SESSION_EXPIRED = "error.meeting.runtime-session.expired";
+
   public static final String ROOM_NOT_FOUND = "error.meeting.room.not-found";
   public static final String ROOM_ARCHIVED = "error.meeting.room.archived";
   public static final String ROOM_TIMETABLE_MANAGED = "error.meeting.room.timetable-managed";
   public static final String ROOM_NAME_INVALID = "error.meeting.room.name-invalid";
   public static final String ROOM_DESCRIPTION_INVALID = "error.meeting.room.description-invalid";
   public static final String ROOM_TYPE_INVALID = "error.meeting.room.type-invalid";
-  public static final String SETTING_NOT_FOUND = "error.meeting.setting.not-found";
   public static final String SETTING_INVALID = "error.meeting.setting.invalid";
   public static final String MEMBER_NOT_FOUND = "error.meeting.member.not-found";
   public static final String MEMBER_ALREADY_EXISTS = "error.meeting.member.already-exists";
@@ -26,10 +27,6 @@ public final class MeetingErrorConstants {
       "error.meeting.runtime-session.time-invalid";
   public static final String RUNTIME_SESSION_STATE_INVALID =
       "error.meeting.runtime-session.state-invalid";
-  public static final String RUNTIME_SESSION_SCHEDULE_INVALID =
-      "error.meeting.runtime-session.schedule-invalid";
-  public static final String RUNTIME_SESSION_SCHEDULE_CONFLICT =
-      "error.meeting.runtime-session.schedule-conflict";
   public static final String RUNTIME_SESSION_CONCURRENT_UPDATE =
       "error.meeting.runtime-session.concurrent-update";
   public static final String RUNTIME_SESSION_NOT_ACTIVE =
@@ -38,6 +35,7 @@ public final class MeetingErrorConstants {
   public static final String JOIN_FAILED = "error.meeting.join.failed";
   public static final String ROOM_FULL = "error.meeting.room.full";
   public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";
+  public static final String SCREEN_SHARE_BUSY = "error.meeting.screen-share.busy";
   public static final String WEBHOOK_SIGNATURE_INVALID =
       "error.meeting.webhook.signature-invalid";
   public static final String WEBHOOK_PAYLOAD_INVALID =

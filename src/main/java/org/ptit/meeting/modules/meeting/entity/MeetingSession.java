@@ -15,6 +15,9 @@ import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStat
     @UniqueConstraint(name = "uk_sessions_public_id", columnNames = "public_id"),
     @UniqueConstraint(name = "uk_sessions_provider_room", columnNames = "provider_room_name"),
     @UniqueConstraint(name = "uk_sessions_occurrence", columnNames = "schedule_occurrence_id")
+}, indexes = {
+    @Index(name = "idx_sessions_status_end", columnList = "status, scheduled_end"),
+    @Index(name = "idx_sessions_cleanup_pending", columnList = "cleanup_pending")
 })
 @Getter
 @Setter
@@ -73,6 +76,9 @@ public class MeetingSession {
 
   @Column(name = "actual_end")
   private LocalDateTime actualEnd;
+
+  @Column(name = "cleanup_pending", nullable = false, columnDefinition = "boolean default false")
+  private boolean cleanupPending;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false, length = 30)

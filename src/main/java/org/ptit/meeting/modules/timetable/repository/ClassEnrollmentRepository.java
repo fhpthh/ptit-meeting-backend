@@ -25,6 +25,13 @@ public interface ClassEnrollmentRepository
 
   Optional<ClassEnrollment> findByRoomIdAndUserId(String roomId, Long userId);
 
+  @Query("SELECT enrollment.userId FROM ClassEnrollment enrollment "
+      + "WHERE enrollment.roomId = :roomId "
+      + "AND enrollment.status = org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus.ENROLLED "
+      + "AND enrollment.role IN (org.ptit.meeting.modules.meeting.constant.enums.MeetingRole.OWNER, "
+      + "org.ptit.meeting.modules.meeting.constant.enums.MeetingRole.HOST)")
+  List<Long> findActiveHostUserIds(@Param("roomId") String roomId);
+
   List<ClassEnrollment> findAllByClassSectionIdAndStatusOrderByEnrolledAtAsc(
       Long classSectionId, EnrollmentStatus status);
 

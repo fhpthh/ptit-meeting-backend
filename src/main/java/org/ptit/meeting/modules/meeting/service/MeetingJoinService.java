@@ -6,6 +6,10 @@ public interface MeetingJoinService {
 
   MeetingJoinResponse join(String runtimeSessionId, Long currentUserId);
 
+  void acquireScreenShare(String runtimeSessionId, String participantSid, Long currentUserId);
+
+  void releaseScreenShare(String runtimeSessionId, String participantSid, Long currentUserId);
+
   boolean admitParticipant(String runtimeSessionId, Long userId);
 
   void synchronizeRoom(String roomId);
