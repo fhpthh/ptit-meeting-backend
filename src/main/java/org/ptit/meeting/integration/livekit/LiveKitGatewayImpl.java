@@ -75,7 +75,7 @@ final class LiveKitGatewayImpl implements LiveKitGateway {
         .setCanSubscribe(grant.canSubscribe()).setCanPublish(!grant.publishSources().isEmpty())
         .addAllCanPublishSources(grant.publishSources().stream()
             .map(source -> TrackSource.valueOf(source.toUpperCase(Locale.ROOT))).toList())
-        .setCanPublishData(false).setCanUpdateMetadata(false).build();
+        .setCanPublishData(grant.canPublishData()).setCanUpdateMetadata(false).build();
     try {
       Response<ParticipantInfo> response = liveKitApi.getRoom().updateParticipant(grant.roomName(),
           grant.participantIdentity(), grant.participantName(), grant.participantMetadata(), permission).execute();

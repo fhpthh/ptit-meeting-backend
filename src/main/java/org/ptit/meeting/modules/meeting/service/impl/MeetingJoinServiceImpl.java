@@ -21,6 +21,7 @@ import org.ptit.meeting.integration.livekit.dto.LiveKitJoinGrant;
 import org.ptit.meeting.integration.livekit.dto.LiveKitTokenResult;
 import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.auth.service.UserService;
+import org.ptit.meeting.modules.ai.service.AiWorkerAuthorizationService;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
@@ -52,6 +53,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private final UserService userService;
   private final ObjectMapper objectMapper;
   private final LiveKitGateway liveKitGateway;
+  private final AiWorkerAuthorizationService aiWorkerAuthorizationService;
 
   @Override
   @Transactional
@@ -100,7 +102,8 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
         user.getFullName(), createParticipantMetadata(session, room, member), true,
         host || participant && setting.isParticipantMicEnabled(),
         host || participant && setting.isParticipantCameraEnabled(),
-        host || participant && setting.isParticipantScreenShareEnabled());
+          host || participant && setting.isParticipantScreenShareEnabled(),
+          true);
   }
 
   private void requireCapacity(MeetingSession session, MeetingRoomSetting setting, String identity) {
@@ -168,6 +171,9 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private void synchronizeSession(MeetingSession session, Room room, MeetingRoomSetting setting) {
     int admitted = 0;
     for (LiveKitParticipantSnapshot participant : orderedParticipants(session)) {
+      if (aiWorkerAuthorizationService.isAuthorized(session.getPublicId(), participant)) {
+        continue;
+      }
       Long userId = userIdFromIdentity(participant.identity());
       LiveKitJoinGrant grant = userId == null || room.getStatus() != RoomStatus.ACTIVE
           ? null : currentGrant(session, room, setting, userId);

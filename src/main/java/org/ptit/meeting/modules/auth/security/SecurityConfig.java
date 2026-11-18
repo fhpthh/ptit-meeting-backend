@@ -35,6 +35,7 @@ public class SecurityConfig {
       "/api/v1/auth/refresh",
       "/api/v1/auth/logout",
       "/api/v1/integrations/livekit/webhook",
+      "/internal/v1/ai-realtime/final-captions",
       "/error",
       "/swagger-ui.html",
       "/swagger-ui/**",
