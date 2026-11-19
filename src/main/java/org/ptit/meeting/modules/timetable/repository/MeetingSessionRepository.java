@@ -6,6 +6,7 @@ import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentOnlineScheduleRow;
+import org.ptit.meeting.modules.timetable.dto.response.StudentOnlineSubjectResponse;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentScheduleTimeRow;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -113,6 +114,66 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
     @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
     @Param("sectionStatus") ClassSectionStatus sectionStatus,
     @Param("roomStatus") RoomStatus roomStatus
+  );
+
+  @Query("""
+    SELECT DISTINCT new org.ptit.meeting.modules.timetable.dto.response.StudentOnlineSubjectResponse(
+        subject.id, subject.code, subject.name
+    )
+    FROM MeetingSession session
+    JOIN ClassSchedule schedule ON schedule.id = session.scheduleId
+    JOIN ClassSection section ON section.id = schedule.classSectionId
+    JOIN ClassEnrollment enrollment ON enrollment.classSectionId = section.id
+    JOIN Subject subject ON subject.id = section.subjectId
+    JOIN Room room ON room.id = session.roomId
+    WHERE enrollment.userId = :studentId
+      AND enrollment.status = :enrollmentStatus
+      AND section.semesterId = :semesterId
+      AND section.status = :sectionStatus
+      AND room.status = :roomStatus
+      AND schedule.isOnline = true
+    ORDER BY subject.name ASC
+    """)
+  List<StudentOnlineSubjectResponse> findStudentOnlineSubjects(
+      @Param("studentId") Long studentId,
+      @Param("semesterId") Long semesterId,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus,
+      @Param("roomStatus") RoomStatus roomStatus
+  );
+
+  @Query("""
+    SELECT new org.ptit.meeting.modules.timetable.dto.internal.StudentOnlineScheduleRow(
+        session.id, session.scheduleId, session.roomId, session.studyDate,
+        session.scheduledStart, session.scheduledEnd, session.status,
+        schedule.startPeriod, schedule.numPeriods,
+        section.id, section.classCode, section.groupNumber, section.practiceGroup,
+        section.lecturerId, section.lecturerName,
+        subject.code, subject.name,
+        room.name, session.publicId, room.publicId
+    )
+    FROM MeetingSession session
+    JOIN ClassSchedule schedule ON schedule.id = session.scheduleId
+    JOIN ClassSection section ON section.id = schedule.classSectionId
+    JOIN ClassEnrollment enrollment ON enrollment.classSectionId = section.id
+    JOIN Subject subject ON subject.id = section.subjectId
+    JOIN Room room ON room.id = session.roomId
+    WHERE enrollment.userId = :studentId
+      AND enrollment.status = :enrollmentStatus
+      AND section.semesterId = :semesterId
+      AND subject.id = :subjectId
+      AND section.status = :sectionStatus
+      AND room.status = :roomStatus
+      AND schedule.isOnline = true
+    ORDER BY session.studyDate ASC, session.scheduledStart ASC
+    """)
+  List<StudentOnlineScheduleRow> findStudentSubjectOnlineSchedule(
+      @Param("studentId") Long studentId,
+      @Param("semesterId") Long semesterId,
+      @Param("subjectId") Long subjectId,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus,
+      @Param("roomStatus") RoomStatus roomStatus
   );
 
   @Query("""
