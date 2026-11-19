@@ -43,4 +43,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
   List<User> findAllByCodeIgnoreCase(String code);
 
   List<User> findAllByFullNameIgnoreCase(String fullName);
+
+  List<User> findAllByAccountTypeAndDepartmentIsNotNull(AccountType accountType);
 }
