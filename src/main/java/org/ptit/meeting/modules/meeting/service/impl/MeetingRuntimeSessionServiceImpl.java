@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.integration.livekit.LiveKitGateway;
+import org.ptit.meeting.modules.ai.service.AiRealtimeSessionService;
 import org.ptit.meeting.integration.livekit.dto.LiveKitParticipantSnapshot;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
@@ -57,6 +58,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   private final MeetingHandRaiseService handRaiseService;
   private final MeetingHostPresenceService hostPresenceService;
   private final PlatformTransactionManager transactionManager;
+  private final AiRealtimeSessionService aiRealtimeSessionService;
 
   @Override
   @Transactional
@@ -233,6 +235,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
       }
       // Stop media first; a Redis failure must not leave the call running.
       liveKitGateway.deleteRoom(session.getProviderRoomName());
+      aiRealtimeSessionService.stopAfterMeetingEnded(runtimeSessionId);
       chatService.clearHistory(runtimeSessionId);
       handRaiseService.clear(runtimeSessionId);
       hostPresenceService.clear(runtimeSessionId);

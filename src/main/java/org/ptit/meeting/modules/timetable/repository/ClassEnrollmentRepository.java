@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionStudentRow;
+import org.ptit.meeting.modules.timetable.dto.response.StudentClassEnrollmentResponse;
 import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ClassEnrollmentRepository
     extends JpaRepository<ClassEnrollment, Long> {
+
+  @Query(value = StudentClassEnrollmentQueries.LIST,
+      countQuery = "SELECT COUNT(e.id) " + StudentClassEnrollmentQueries.JOINS)
+  Page<StudentClassEnrollmentResponse> findStudentClassEnrollments(
+      @Param("userId") Long userId, @Param("semesterId") Long semesterId, Pageable pageable);
 
   List<ClassEnrollment> findAllByUserIdAndStatus(
       Long userId,

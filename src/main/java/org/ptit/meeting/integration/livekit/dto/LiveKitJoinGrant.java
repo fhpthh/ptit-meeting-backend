@@ -11,7 +11,8 @@ public record LiveKitJoinGrant(
     boolean canSubscribe,
     boolean canPublishMicrophone,
     boolean canPublishCamera,
-    boolean canShareScreen
+    boolean canShareScreen,
+    boolean canPublishData
 ) {
   public List<String> publishSources() {
     List<String> sources = new ArrayList<>(4);

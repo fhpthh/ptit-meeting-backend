@@ -37,7 +37,7 @@ final class LiveKitTokenFactory {
           new CanSubscribe(grant.canSubscribe()),
           new CanPublish(!publishSources.isEmpty()),
           new CanPublishSources(publishSources),
-          new CanPublishData(false),
+          new CanPublishData(grant.canPublishData()),
           new CanUpdateOwnMetadata(false)
       );
 

@@ -32,7 +32,7 @@ services:
           tcp_port: 7881
           udp_port: 7882
           use_external_ip: false
-          node_ip: 172.16.9.58
+          node_ip: ${LIVEKIT_NODE_IP:-127.0.0.1}
         redis:
           address: redis:6379
         keys:

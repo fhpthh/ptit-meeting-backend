@@ -21,6 +21,7 @@ import org.ptit.meeting.modules.auth.repository.UserRepository;
 import org.ptit.meeting.modules.auth.repository.UserRoleRepository;
 import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.utils.PtitAccountUtils;
+import org.ptit.meeting.modules.student.service.LegacyStudentStructureSyncService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class UserServiceImpl implements UserService {
   private final RoleRepository roleRepository;
   private final UserRoleRepository userRoleRepository;
   private final PasswordEncoder passwordEncoder;
+  private final LegacyStudentStructureSyncService studentStructureSync;
 
   @Override
   @Transactional(readOnly = true)
@@ -221,6 +223,7 @@ public class UserServiceImpl implements UserService {
     }
     if (modified) {
       User saved = userRepository.save(user);
+      if (saved.getAccountType() == AccountType.STUDENT) studentStructureSync.synchronize(saved);
       enrichAuthorities(saved);
       return saved;
     }
@@ -274,6 +277,7 @@ public class UserServiceImpl implements UserService {
       if (modified) {
         existing = userRepository.save(existing);
       }
+      studentStructureSync.synchronize(existing);
       enrichAuthorities(existing);
       return existing;
     }
@@ -289,6 +293,7 @@ public class UserServiceImpl implements UserService {
         .mustChangePassword(true) // Yêu cầu đổi mật khẩu ở lần đăng nhập thường đầu tiên
         .build();
     User saved = userRepository.save(newStudent);
+    studentStructureSync.synchronize(saved);
     // Gán vai trò ROLE_STUDENT
     roleRepository.findByCode(RoleCode.ROLE_STUDENT.name()).ifPresent(role -> {
       userRoleRepository.save(UserRole.builder()

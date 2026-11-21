@@ -11,7 +11,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/ptit_meeting?useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true&characterEncoding=UTF-8}
     username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:24102004}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -50,6 +50,14 @@ azure:
     graph-user-info-url: https://graph.microsoft.com/v1.0/me
 
 application:
+  ai-realtime:
+    enabled: ${AI_REALTIME_ENABLED:false}
+    base-url: ${AI_REALTIME_BASE_URL:http://127.0.0.1:8020}
+    service-secret: ${AI_REALTIME_SERVICE_SECRET:}
+    callback-base-url: ${AI_REALTIME_CALLBACK_BASE_URL:http://127.0.0.1:8080}
+    request-timeout-ms: ${AI_REALTIME_REQUEST_TIMEOUT_MS:120000}
+    terminology-profile: ${AI_REALTIME_TERMINOLOGY_PROFILE:whisper_ai}
+
   livekit:
     enabled: ${LIVEKIT_ENABLED:true}
     api-url: ${LIVEKIT_API_URL:http://localhost:7880}

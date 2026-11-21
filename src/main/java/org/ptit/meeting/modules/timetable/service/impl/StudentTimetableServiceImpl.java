@@ -14,6 +14,8 @@ import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentOnlineScheduleRow;
 import org.ptit.meeting.modules.timetable.dto.internal.StudentScheduleTimeRow;
 import org.ptit.meeting.modules.timetable.dto.response.StudentSemesterResponse;
+import org.ptit.meeting.modules.timetable.dto.response.StudentOnlineSubjectResponse;
+import org.ptit.meeting.modules.timetable.dto.response.StudentSubjectOnlineScheduleResponse;
 import org.ptit.meeting.modules.timetable.dto.response.StudentWeeklyTimetableResponse;
 import org.ptit.meeting.modules.timetable.entity.Semester;
 import org.ptit.meeting.modules.timetable.mapper.StudentTimetableMapper;
@@ -139,6 +141,64 @@ public class StudentTimetableServiceImpl
         timeline,
         items
     );
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<StudentOnlineSubjectResponse> getOnlineSubjects(
+      Long studentId,
+      Long semesterId
+  ) {
+    requireSemester(semesterId);
+    return meetingSessionRepository.findStudentOnlineSubjects(
+        studentId,
+        semesterId,
+        EnrollmentStatus.ENROLLED,
+        ClassSectionStatus.ACTIVE,
+        RoomStatus.ACTIVE
+    );
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public StudentSubjectOnlineScheduleResponse getSubjectOnlineSchedule(
+      Long studentId,
+      Long semesterId,
+      Long subjectId
+  ) {
+    Semester semester = requireSemester(semesterId);
+    StudentOnlineSubjectResponse subject = getOnlineSubjects(studentId, semesterId)
+        .stream()
+        .filter(item -> item.id().equals(subjectId))
+        .findFirst()
+        .orElseThrow(() -> BusinessException.notExisted(
+            TimetableErrorConstants.SUBJECT_NOT_FOUND,
+            subjectId
+        ));
+
+    List<StudentWeeklyTimetableResponse.TimetableItem> items =
+        meetingSessionRepository.findStudentSubjectOnlineSchedule(
+            studentId,
+            semesterId,
+            subjectId,
+            EnrollmentStatus.ENROLLED,
+            ClassSectionStatus.ACTIVE,
+            RoomStatus.ACTIVE
+        ).stream().map(studentTimetableMapper::toTimetableItem).toList();
+
+    return new StudentSubjectOnlineScheduleResponse(
+        studentTimetableMapper.toSemesterResponse(semester),
+        subject,
+        items
+    );
+  }
+
+  private Semester requireSemester(Long semesterId) {
+    return semesterRepository.findById(semesterId)
+        .orElseThrow(() -> BusinessException.notExisted(
+            TimetableErrorConstants.SEMESTER_NOT_FOUND,
+            semesterId
+        ));
   }
 
   private StudentWeeklyTimetableResponse.TimelineInfo buildTimeline(
