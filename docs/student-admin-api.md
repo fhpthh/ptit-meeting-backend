@@ -86,3 +86,20 @@ All routes below require `ROLE_ADMIN` and use `/api/v1/admin/student-structure`:
 The options endpoint narrows cohorts by campus, majors by campus and cohort, and administrative
 classes by all supplied parent IDs. Tree counts come from `student_academic_profiles`; the UI values
 are calculated data rather than fixed display numbers.
+# Automatic academic structure resolution
+
+Legacy imports and admin profile writes without an explicit academic assignment resolve
+the hierarchy as campus -> program/cohort -> training group -> administrative class.
+The student identifier's B/N prefix identifies HN/HCM. A class suffix -B/-N is a
+fallback when the student identifier is absent and a consistency check when present.
+D/E in a class code identifies a program, never a campus. Admission years must agree.
+Class codes retain their original normalized spelling; CQ is removed only from the
+derived training-group code. CNPM and similar codes remain grouping codes, not a claim
+about a verified major/specialization catalog.
+
+Unsupported, conflicting identifiers and existing classes belonging to another campus
+or cohort are logged for review and are not automatically reassigned. The current
+database requires globally unique administrative class codes; ambiguous identical codes
+across campuses are not merged. Explicit assignments use the existing catalog workflow.
+The existing tree/options response remains unchanged and the frontend renders its IDs
+and relations directly, with no client-side campus inference.

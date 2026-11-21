@@ -43,6 +43,7 @@ import org.ptit.meeting.modules.student.dto.response.StudentAcademicProfileRespo
 import org.ptit.meeting.modules.student.dto.request.StudentAcademicAssignmentRequest;
 import org.ptit.meeting.modules.student.service.StudentAcademicProfileService;
 import org.ptit.meeting.modules.student.service.StudentStructureService;
+import org.ptit.meeting.modules.student.service.LegacyStudentStructureSyncService;
 import org.ptit.meeting.utils.PtitAccountUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -70,6 +71,7 @@ public class StudentAdminServiceImpl implements StudentAdminService {
   private final StudentClassEnrollmentReadService enrollmentReadService;
   private final StudentAcademicProfileService academicProfiles;
   private final StudentStructureService studentStructure;
+  private final LegacyStudentStructureSyncService structureSync;
 
   @Override
   public PageResponseDTO<StudentAdminResponse> search(StudentAdminSearchRequest request) {
@@ -93,8 +95,10 @@ public class StudentAdminServiceImpl implements StudentAdminService {
     User student = User.builder().accountType(STUDENT).passwordHash(hash).build();
     applyProfile(student, request.email(), request.code(), request.fullName(), request.department());
     students.saveAndFlush(student);
+    if (request.academicProfile() == null) structureSync.synchronize(student);
     userRoles.save(UserRole.builder().userId(student.getId()).roleId(role.getId()).build());
-    StudentAcademicProfileResponse profile = request.academicProfile() == null ? null
+    StudentAcademicProfileResponse profile = request.academicProfile() == null
+        ? academicProfiles.findByUserId(student.getId())
         : academicProfiles.upsert(student.getId(), request.academicProfile());
     return mapper.toResponse(student, profile);
   }
@@ -106,6 +110,7 @@ public class StudentAdminServiceImpl implements StudentAdminService {
     User student = lockStudent(id);
     applyProfile(student, request.email(), request.code(), request.fullName(), request.department());
     students.saveAndFlush(student);
+    if (request.academicProfile() == null) structureSync.synchronize(student);
     StudentAcademicProfileResponse profile = request.academicProfile() == null
         ? academicProfiles.findByUserId(student.getId())
         : academicProfiles.upsert(student.getId(), request.academicProfile());

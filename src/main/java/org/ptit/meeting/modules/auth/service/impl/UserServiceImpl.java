@@ -223,6 +223,7 @@ public class UserServiceImpl implements UserService {
     }
     if (modified) {
       User saved = userRepository.save(user);
+      if (saved.getAccountType() == AccountType.STUDENT) studentStructureSync.synchronize(saved);
       enrichAuthorities(saved);
       return saved;
     }

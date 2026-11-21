@@ -1,8 +1,5 @@
 package org.ptit.meeting.modules.student.service;
 
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
@@ -29,8 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class LegacyStudentStructureSyncService {
-  private static final Pattern CLASS_CODE =
-      Pattern.compile("^([A-Z]\\d{2})([A-Z]+)(\\d+)$");
+  private final StudentStructureResolver resolver;
 
   private final UserRepository users;
   private final AcademicCampusRepository campuses;
@@ -58,23 +54,32 @@ public class LegacyStudentStructureSyncService {
     if (student == null || student.getId() == null || student.getDepartment() == null) {
       return false;
     }
-    String classCode = student.getDepartment().strip().toUpperCase(Locale.ROOT);
-    Matcher matcher = CLASS_CODE.matcher(classCode);
-    if (!matcher.matches()) {
-      log.debug("Skip unsupported administrative class code: {}", classCode);
+    var resolved = resolver.resolve(student.getCode(), student.getDepartment());
+    if (resolved.isEmpty()) {
+      log.warn("Academic structure requires review for student {}: code={}, class={}",
+          student.getId(), student.getCode(), student.getDepartment());
       return false;
     }
-
-    String cohortCode = matcher.group(1);
-    String majorCode = matcher.group(2);
-    AcademicCampus campus = campusFor(classCode);
+    var structure = resolved.get();
+    String classCode = structure.classCode();
+    String cohortCode = structure.cohortCode();
+    String majorCode = structure.majorCode();
+    var existingClass = classes.findByCodeIgnoreCase(classCode);
+    if (existingClass.isPresent()
+        && (!existingClass.get().getCampus().getCode().equalsIgnoreCase(structure.campusCode())
+            || !existingClass.get().getCohort().getCode().equalsIgnoreCase(cohortCode))) {
+      log.warn("Conflicting campus/cohort for administrative class {}; student {} needs review",
+          classCode, student.getId());
+      return false;
+    }
+    AcademicCampus campus = campusFor(structure.campusCode());
     AdmissionCohort cohort = cohorts.findByCodeIgnoreCase(cohortCode)
         .orElseGet(() -> cohorts.save(AdmissionCohort.builder()
             .code(cohortCode).name("Khóa " + cohortCode).build()));
     AcademicMajor major = majors.findByCodeIgnoreCase(majorCode)
         .orElseGet(() -> majors.save(AcademicMajor.builder()
             .code(majorCode).name(majorCode).build()));
-    AdministrativeClass administrativeClass = classes.findByCodeIgnoreCase(classCode)
+    AdministrativeClass administrativeClass = existingClass
         .orElseGet(() -> classes.save(AdministrativeClass.builder()
             .code(classCode).name(classCode).campus(campus).cohort(cohort).major(major).build()));
 
@@ -90,20 +95,10 @@ public class LegacyStudentStructureSyncService {
     return true;
   }
 
-  private AcademicCampus campusFor(String classCode) {
-    String code;
-    String name;
-    if (classCode.startsWith("D")) {
-      code = "HN";
-      name = "Cơ sở Hà Nội";
-    } else if (classCode.startsWith("N")) {
-      code = "HCM";
-      name = "Cơ sở TP. Hồ Chí Minh";
-    } else {
-      code = "PTIT";
-      name = "Học viện Công nghệ Bưu chính Viễn thông";
-    }
-    return campuses.findByCodeIgnoreCase(code)
-        .orElseGet(() -> campuses.save(AcademicCampus.builder().code(code).name(name).build()));
+  private AcademicCampus campusFor(String campusCode) {
+    String name = campusCode.equals("HN") ? "Cơ sở Hà Nội" : "Cơ sở TP. Hồ Chí Minh";
+    return campuses.findByCodeIgnoreCase(campusCode)
+        .orElseGet(() -> campuses.save(AcademicCampus.builder()
+            .code(campusCode).name(name).build()));
   }
 }
