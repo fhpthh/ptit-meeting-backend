@@ -15,6 +15,7 @@ import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.ParticipantConnectionStatus;
 import org.ptit.meeting.modules.meeting.dto.internal.ParticipantConnectionEvent;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceConnectionResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.entity.ParticipantConnection;
@@ -68,11 +69,7 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
       String runtimeSessionId,
       Long currentUserId
   ) {
-    MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    authorizationService.requireRuntimeSessionHost(
-        runtimeSession.getMeetingRoomId(),
-        currentUserId
-    );
+    MeetingSession runtimeSession = requireAttendanceSession(runtimeSessionId, currentUserId);
 
     Map<Long, List<ParticipantConnection>> connectionsByUser = connectionRepository
         .findAllByRuntimeSessionId(runtimeSessionId)
@@ -97,6 +94,39 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
         ))
         .filter(response -> response.connectionCount() > 0)
         .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MeetingAttendanceConnectionResponse> getConnections(
+      String runtimeSessionId,
+      Long userId,
+      Long currentUserId
+  ) {
+    MeetingSession session = requireAttendanceSession(runtimeSessionId, currentUserId);
+    Instant calculatedAt = session.getActualEndAt() == null
+        ? Instant.now()
+        : session.getActualEndAt();
+    boolean sessionIsActive = session.getRuntimeStatus() == MeetingRuntimeSessionStatus.ACTIVE;
+    return connectionRepository
+        .findAllByRuntimeSessionIdAndUserIdAndJoinedAtIsNotNullOrderByJoinedAtAscIdAsc(
+            runtimeSessionId, userId
+        ).stream()
+        .map(connection -> {
+          TimeInterval interval = toInterval(connection, calculatedAt);
+          return new MeetingAttendanceConnectionResponse(
+              connection.getId(), connection.getJoinedAt(), connection.getLeftAt(),
+              Duration.between(interval.start(), interval.end()).getSeconds(),
+              connection.getStatus(), isCurrentlyOnline(connection, sessionIsActive)
+          );
+        })
+        .toList();
+  }
+
+  private MeetingSession requireAttendanceSession(String runtimeSessionId, Long currentUserId) {
+    MeetingSession session = findRuntimeSession(runtimeSessionId);
+    authorizationService.requireRuntimeSessionHost(session.getMeetingRoomId(), currentUserId);
+    return session;
   }
 
   private Optional<ParticipantConnection> findConnection(ParticipantConnectionEvent event) {
@@ -145,10 +175,7 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
         .max(Comparator.naturalOrder())
         .orElse(null);
     boolean currentlyOnline = sessionIsActive && connections.stream()
-        .anyMatch(connection ->
-            connection.getStatus() == ParticipantConnectionStatus.ACTIVE
-                && connection.getLeftAt() == null
-        );
+        .anyMatch(connection -> isCurrentlyOnline(connection, sessionIsActive));
 
     return new MeetingAttendanceResponse(
         userId,
@@ -169,6 +196,12 @@ public class MeetingAttendanceServiceImpl implements MeetingAttendanceService {
       end = connection.getJoinedAt();
     }
     return new TimeInterval(connection.getJoinedAt(), end);
+  }
+
+  private boolean isCurrentlyOnline(ParticipantConnection connection, boolean sessionIsActive) {
+    return sessionIsActive && connection.getJoinedAt() != null
+        && connection.getStatus() == ParticipantConnectionStatus.ACTIVE
+        && connection.getLeftAt() == null;
   }
 
   private long unionDurationSeconds(List<TimeInterval> intervals) {

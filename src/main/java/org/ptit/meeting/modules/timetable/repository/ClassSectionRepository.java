@@ -1,13 +1,17 @@
 package org.ptit.meeting.modules.timetable.repository;
 
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.ptit.meeting.modules.timetable.dto.internal.SemesterClassSectionCountRow;
 import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionListRow;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
+import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,6 +25,27 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public interface ClassSectionRepository extends JpaRepository<ClassSection, Long> {
+
+  @Query(ClassSectionQueries.FIND_ACCESSIBLE_ONLINE_CLASS)
+  Optional<ClassSection> findAccessibleOnlineClass(
+      @Param("sectionId") Long sectionId,
+      @Param("userId") Long userId,
+      @Param("excludedSectionStatus") ClassSectionStatus excludedSectionStatus,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus
+  );
+
+  @Query(ClassSectionQueries.FIND_ONLINE_CLASSES)
+  List<ClassSectionResponse> findOnlineClasses(
+      @Param("userId") Long userId,
+      @Param("semesterId") Long semesterId,
+      @Param("academicYear") String academicYear,
+      @Param("excludedSectionStatus") ClassSectionStatus excludedSectionStatus,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("cancelledStatus") SessionStatus cancelledStatus,
+      @Param("endedStatus") SessionStatus endedStatus,
+      @Param("scheduledStatus") SessionStatus scheduledStatus,
+      @Param("now") LocalDateTime now
+  );
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT section FROM ClassSection section WHERE section.id = :id")

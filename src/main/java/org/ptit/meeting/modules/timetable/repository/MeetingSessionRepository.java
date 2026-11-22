@@ -2,6 +2,7 @@ package org.ptit.meeting.modules.timetable.repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
@@ -13,11 +14,28 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSessionResponse;
 import org.ptit.meeting.modules.timetable.dto.internal.LecturerOnlineScheduleRow;
 import org.ptit.meeting.modules.timetable.dto.internal.LecturerScheduleTimeRow;
 
 @Repository
 public interface MeetingSessionRepository extends JpaRepository<MeetingSession, Long> {
+
+  @Query(ClassSectionQueries.FIND_CLASS_SESSION)
+  Optional<ClassSessionResponse> findClassSession(
+      @Param("sectionId") Long sectionId, @Param("sessionId") Long sessionId
+  );
+
+  @Query(value = ClassSectionQueries.FIND_CLASS_SESSIONS,
+      countQuery = ClassSectionQueries.COUNT_CLASS_SESSIONS)
+  Page<ClassSessionResponse> findClassSessions(
+      @Param("sectionId") Long sectionId,
+      @Param("status") SessionStatus status,
+      Pageable pageable
+  );
 
   boolean existsByScheduleIdAndStudyDate(Long scheduleId, LocalDate date);
 

@@ -15,6 +15,7 @@ import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomMemberCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomMemberRoleUpdateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRoomMemberResponse;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingStudentLookupResponse;
 import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.meeting.event.MeetingParticipantRemovedEvent;
 import org.ptit.meeting.modules.meeting.event.MeetingRoomAccessChangedEvent;
@@ -96,6 +97,23 @@ public class MeetingRoomMemberServiceImpl implements MeetingRoomMemberService {
         .map(member -> memberMapper.toResponse(member, room.getPublicId()))
         .forEach(response::add);
     return response;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public MeetingStudentLookupResponse lookupStudent(
+      String roomId, String identifier, Long currentUserId
+  ) {
+    Room room = findRoom(roomId);
+    authorizationService.requireRoomOwner(room.getPublicId(), currentUserId);
+    requireActiveRoom(room);
+    User student = userService.findActiveStudent(identifier)
+        .orElseThrow(() -> BusinessException.notExisted(MeetingErrorConstants.MEMBER_STUDENT_NOT_FOUND));
+    boolean enrolled = findMember(room, student.getId())
+        .filter(member -> member.getStatus() == EnrollmentStatus.ENROLLED).isPresent();
+    return new MeetingStudentLookupResponse(
+        student.getId(), student.getCode(), student.getFullName(), student.getEmail(), enrolled
+    );
   }
 
   @Override

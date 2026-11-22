@@ -3,6 +3,7 @@ package org.ptit.meeting.modules.meeting.controller;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.common.wrapper.BaseResponse;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceConnectionResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRuntimeSessionResponse;
@@ -42,6 +43,17 @@ public class MeetingRuntimeSessionController {
   ) {
     return BaseResponse.success(
         attendanceService.getAttendance(runtimeSessionId, currentUserId)
+    );
+  }
+
+  @GetMapping("/{runtimeSessionId}/attendance/{userId}/connections")
+  public BaseResponse<List<MeetingAttendanceConnectionResponse>> getAttendanceConnections(
+      @PathVariable String runtimeSessionId,
+      @PathVariable Long userId,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    return BaseResponse.success(
+        attendanceService.getConnections(runtimeSessionId, userId, currentUserId)
     );
   }
 

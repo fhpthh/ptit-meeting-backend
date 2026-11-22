@@ -125,6 +125,25 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  @Transactional(readOnly = true)
+  public Optional<User> findActiveStudent(String identifier) {
+    if (identifier == null || identifier.isBlank() || identifier.length() > 100) {
+      return Optional.empty();
+    }
+    String value = identifier.trim();
+    List<User> matches = Stream.concat(
+            userRepository.findByEmailIgnoreCase(value).stream(),
+            Stream.of(value, PtitAccountUtils.normalizeToFullStudentCode(value),
+                    PtitAccountUtils.normalizeToShortStudentCode(value))
+                .distinct()
+                .flatMap(code -> userRepository.findAllByCodeIgnoreCase(code).stream()))
+        .filter(user -> user.getAccountType() == AccountType.STUDENT && user.isActive())
+        .collect(java.util.stream.Collectors.toMap(User::getId, user -> user, (first, second) -> first))
+        .values().stream().toList();
+    return matches.size() == 1 ? Optional.of(matches.getFirst()) : Optional.empty();
+  }
+
+  @Override
   @Transactional
   public User findOrCreateByEmail(String email, String fullName, String code,
       AccountType accountType) {

@@ -2,6 +2,7 @@ package org.ptit.meeting.modules.meeting.service;
 
 import java.util.List;
 import org.ptit.meeting.modules.meeting.dto.internal.ParticipantConnectionEvent;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceConnectionResponse;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingAttendanceResponse;
 
 public interface MeetingAttendanceService {
@@ -14,6 +15,12 @@ public interface MeetingAttendanceService {
 
   List<MeetingAttendanceResponse> getAttendance(
       String runtimeSessionId,
+      Long currentUserId
+  );
+
+  List<MeetingAttendanceConnectionResponse> getConnections(
+      String runtimeSessionId,
+      Long userId,
       Long currentUserId
   );
 }

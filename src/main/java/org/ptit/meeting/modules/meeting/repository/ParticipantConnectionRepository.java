@@ -14,4 +14,10 @@ public interface ParticipantConnectionRepository
   );
 
   List<ParticipantConnection> findAllByRuntimeSessionId(String runtimeSessionId);
+
+  List<ParticipantConnection>
+      findAllByRuntimeSessionIdAndUserIdAndJoinedAtIsNotNullOrderByJoinedAtAscIdAsc(
+          String runtimeSessionId,
+          Long userId
+      );
 }

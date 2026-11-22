@@ -15,6 +15,7 @@ public final class MeetingErrorConstants {
   public static final String ROOM_TYPE_INVALID = "error.meeting.room.type-invalid";
   public static final String SETTING_INVALID = "error.meeting.setting.invalid";
   public static final String MEMBER_NOT_FOUND = "error.meeting.member.not-found";
+  public static final String MEMBER_STUDENT_NOT_FOUND = "error.meeting.member.student-not-found";
   public static final String MEMBER_ALREADY_EXISTS = "error.meeting.member.already-exists";
   public static final String MEMBER_ROLE_INVALID = "error.meeting.member.role-invalid";
   public static final String OWNER_IMMUTABLE = "error.meeting.member.owner-immutable";

@@ -31,7 +31,8 @@ public record ClassSectionSummaryResponse(
   public record OnlineRoomSummary(
       Long id,
       String name,
-      String status
+      String status,
+      String meetingRoomId
   ) {
   }
 }

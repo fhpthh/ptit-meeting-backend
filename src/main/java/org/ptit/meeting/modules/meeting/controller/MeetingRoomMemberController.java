@@ -6,6 +6,7 @@ import org.ptit.meeting.common.wrapper.BaseResponse;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomMemberCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRoomMemberRoleUpdateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRoomMemberResponse;
+import org.ptit.meeting.modules.meeting.dto.response.MeetingStudentLookupResponse;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomMemberService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -34,6 +35,15 @@ public class MeetingRoomMemberController {
       @AuthenticationPrincipal(expression = "userId") Long currentUserId
   ) {
     return BaseResponse.success(memberService.getActiveMembers(roomId, currentUserId));
+  }
+
+  @GetMapping("/student-lookup")
+  public BaseResponse<MeetingStudentLookupResponse> lookupStudent(
+      @PathVariable String roomId,
+      @RequestParam String identifier,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    return BaseResponse.success(memberService.lookupStudent(roomId, identifier, currentUserId));
   }
 
   @PatchMapping("/{memberUserId}/role")
