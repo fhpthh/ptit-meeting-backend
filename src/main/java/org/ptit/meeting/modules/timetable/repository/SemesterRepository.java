@@ -59,6 +59,13 @@ public interface SemesterRepository extends JpaRepository<Semester, Long> {
       @Param("sectionStatus") ClassSectionStatus sectionStatus
   );
 
+  @Query(ClassSectionQueries.FIND_SEMESTERS)
+  List<Semester> findAllForOnlineClasses(
+      @Param("userId") Long userId,
+      @Param("excludedSectionStatus") ClassSectionStatus excludedSectionStatus,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus
+  );
+
   boolean existsByCodeAndIdNot(String code, Long id);
 
   @Query("""

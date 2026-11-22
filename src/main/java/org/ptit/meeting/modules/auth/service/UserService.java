@@ -21,6 +21,8 @@ public interface UserService {
 
   Optional<User> findLecturer(String identifier);
 
+  Optional<User> findActiveStudent(String identifier);
+
   User findOrCreateByEmail(String email, String fullName, String code, AccountType accountType);
 
   User changePassword(Long userId, String oldPassword, String newPassword);

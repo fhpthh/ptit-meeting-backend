@@ -624,3 +624,82 @@ INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (5, 3), (5, 4);
 mvn test -Dtest=MasterTimetableExcelAdapterTest
 ```
 Kết quả mong đợi: `BUILD SUCCESS` (Dò đúng dòng tiêu đề Dòng 7, ánh xạ 13 cột, phát hiện 17 tuần học và đọc thành công dữ liệu).
+
+## 12. Lớp tín chỉ dùng chung cho giảng viên và sinh viên
+
+- Resource đọc dùng chung /api/v1/class-sections, controller/service/DTO không gắn
+  vai trò: ClassSectionController, ClassSectionService, ClassSectionResponse,
+  ClassSessionResponse, ClassSectionSemesterResponse. Không đặt nghiệp vụ lớp
+  trong các service thời khóa biểu theo vai trò.
+- Lấy userId từ principal; không nhận lecturerId/studentId/userId từ client.
+  Một tài khoản được đọc lớp khi được phân công giảng dạy **hoặc** có bản ghi
+  ClassEnrollment đang ENROLLED. Lớp phải không bị CANCELED và có lịch online.
+  Cùng điều kiện quan hệ được dùng cho danh sách, bộ lọc học kỳ và kiểm tra chi tiết.
+  Ghi danh DROPPED, thành viên của phòng độc lập và người ngoài lớp không cấp quyền.
+  Lớp không tồn tại/không được truy cập trả cùng 404; chưa đăng nhập trả 401.
+- GET /api/v1/class-sections/semesters: học kỳ có lớp được truy cập, gồm lớp đã hoàn thành.
+  DTO chỉ trả dữ liệu cần cho bộ lọc: id, tên, năm học, số học kỳ, active.
+- GET /api/v1/class-sections?academicYear=2026-2027&semesterId=1: hai bộ lọc
+  tùy chọn kết hợp AND. Trả mã/tên môn, tín chỉ, nhóm, học kỳ/năm học, sĩ số STUDENT
+  đang ghi danh, sĩ số dự kiến, tổng buổi online chưa hủy, số buổi ENDED và buổi SCHEDULED
+  tiếp theo theo múi giờ Việt Nam. Đếm sinh viên bằng subquery riêng, tránh tích
+  sinh viên × session trong join tổng hợp. Một lớp không bị lặp nếu vừa được phân công
+  vừa có membership; vẫn trả lớp chưa có session hoặc sinh viên.
+- GET /api/v1/class-sections/{sectionId}: dùng DTO chi tiết lớp hiện có.
+- GET /api/v1/class-sections/{sectionId}/sessions: phân trang page/size
+  (mặc định 0/20, tối đa 100), lọc status tùy chọn; chỉ session thuộc lịch online
+  của lớp, gồm session đã hủy; sắp xếp ngày/giờ và ID tăng dần.
+- GET /api/v1/class-sections/{sectionId}/students: phân trang tương tự,
+  tìm keyword theo mã/tên/email/lớp hành chính; sortBy=studentCode|fullName.
+  Chỉ trả tài khoản STUDENT đang ENROLLED, dùng DTO hiện có.
+- Detail/session/student cùng đi qua kiểm tra quyền trong ClassSectionService;
+  query lấy session/sinh viên không quyết định quyền. API đọc không cấp quyền quản lý.
+  Thêm/xóa sinh viên hoặc đổi setting phải kiểm tra quyền ghi riêng trong nghiệp vụ
+  tương ứng khi được triển khai; không suy ra quyền ghi từ quyền xem lớp.
+- FE dùng chung API, schema, query và component lớp cho hai workspace; route/layout
+  theo vai trò chỉ là boundary điều hướng. API cũ /api/v1/lecturer/class-sections
+  được thay thế hoàn toàn, không duy trì hai bộ implementation.
+- Thời khóa biểu, API quản trị và meeting hiện có giữ nguyên. Chưa triển khai
+  chi tiết một session hoặc thao tác thêm/xóa sinh viên, setting.
+
+## Chi tiết buổi học của lớp — 2026-11-19
+
+- `GET /api/v1/class-sections/{sectionId}/sessions/{sessionId}` trả `ClassSessionResponse`.
+  Service kiểm tra quyền đọc lớp trước; query buộc session thuộc lịch online của đúng lớp.
+  Lớp không truy cập được hoặc session sai lớp đều trả 404. Không suy ra quyền ghi từ quyền đọc.
+- ID số dùng trong route lớp; `runtimeSessionId` UUID dùng cho các API meeting hiện có.
+- Tab Cấu hình chỉ hiển thị meeting settings. Không có form sửa tên buổi học hoặc khối Hoạt động.
+  Không cung cấp PATCH đổi tên runtime session; ngày/giờ, schedule và studyDate do TKB sở hữu.
+  Các API đọc chi tiết session và lifecycle meeting tiếp tục phục vụ vào phòng, điểm danh và bản ghi.
+- Điểm danh dùng `GET /api/v1/meeting-runtime-sessions/{id}/attendance` (OWNER/HOST).
+  Đây là dữ liệu kết nối thực tế, không phải kết luận đạt/vắng theo tỷ lệ tham dự.
+  Frontend ghép userId với studentId của danh sách lớp hiện tại, không tự tạo điểm danh.
+- Chi tiết vào/ra dùng `GET /api/v1/meeting-runtime-sessions/{id}/attendance/{userId}/connections`.
+  Service kiểm tra OWNER/HOST của phòng chứa phiên trước khi đọc dữ liệu. Chỉ đọc kết nối
+  của đúng phiên và người dùng, đã có joinedAt; sắp xếp joinedAt rồi ID tăng dần.
+  Mỗi lượt trả id, joinedAt, leftAt, durationSeconds, status và currentlyOnline; không trả
+  participant SID/identity. Lượt kết nối chồng nhau vẫn được giữ riêng trong lịch sử;
+  tổng thời lượng điểm danh tiếp tục hợp nhất khoảng thời gian để không đếm trùng.
+  Chưa ghi nhận giờ rời thì leftAt giữ null; thời lượng tạm tính đến hiện tại hoặc actualEnd
+  của phiên đã kết thúc. Phiên đã kết thúc không trả currentlyOnline=true.
+- Bản ghi dùng `GET /api/v1/meeting-runtime-sessions/{id}/recordings`; chỉ bản COMPLETED có URL mới phát.
+- Tab Cấu hình đồng thời dùng API meeting setting đã có:
+  `GET /api/v1/meeting-rooms/{roomId}` và `PATCH /api/v1/meeting-rooms/{roomId}/settings`.
+  Năm trường gồm participantMicEnabled, participantCameraEnabled, participantScreenShareEnabled,
+  maxParticipants (2–100, gồm giảng viên), joinBeforeMinutes (0–1440). Chỉ OWNER của phòng ACTIVE
+  được sửa; HOST có quyền quản lý session nhưng không được sửa setting phòng. Đây là setting chung
+  cho mọi buổi học của lớp, UI ghi rõ phạm vi, không tạo setting riêng hoặc API ghi thứ hai.
+
+## Quản lý sinh viên trong lớp của giảng viên — 2026-11-22
+
+- `onlineRoom.meetingRoomId` trong DTO lớp là UUID để gọi các API meeting; `onlineRoom.id`
+  tiếp tục là ID số TKB. Không chuyển ID số thành UUID hoặc tìm phòng bằng tên.
+- Tab thành viên của giảng viên dùng API thành viên phòng hiện có để thêm sinh viên với
+  `PARTICIPANT` hoặc `HOST`, và đổi vai trò giữa hai giá trị này. Quyền ghi vẫn kiểm tra
+  OWNER của phòng ACTIVE ở backend; vai trò workspace không tự cấp quyền quản lý lớp.
+- `GET /api/v1/meeting-rooms/{roomId}/members/student-lookup?identifier=...` chỉ dành cho
+  OWNER của phòng ACTIVE. Tìm chính xác mã sinh viên đầy đủ/rút gọn hoặc email qua
+  `auth.UserService`, chỉ trả một tài khoản STUDENT đang ACTIVE cùng cờ đã thuộc lớp.
+  Không tạo tài khoản, không tìm theo tên và không mở API quản trị sinh viên cho giảng viên.
+- Thêm vào phòng lớp ghi vào `class_enrollments`; đổi vai trò áp dụng mọi buổi của lớp.
+  Frontend cập nhật cache thành viên, danh sách lớp, sĩ số và roster sau thao tác thành công.

@@ -388,7 +388,7 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
 
   private ClassSectionSummaryResponse.OnlineRoomSummary toOnlineRoomSummary(Room room) {
     return new ClassSectionSummaryResponse.OnlineRoomSummary(
-        room.getId(), room.getName(), room.getStatus().name()
+        room.getId(), room.getName(), room.getStatus().name(), room.getPublicId()
     );
   }
 
