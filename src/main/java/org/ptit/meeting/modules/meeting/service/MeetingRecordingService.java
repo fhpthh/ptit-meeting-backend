@@ -1,6 +1,7 @@
 package org.ptit.meeting.modules.meeting.service;
 
 import java.util.List;
+import org.ptit.meeting.modules.meeting.dto.internal.RecordingTranslationSource;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRecordingCompleteRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRecordingCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRecordingResponse;
@@ -34,6 +35,8 @@ public interface MeetingRecordingService {
   );
 
   MeetingRecordingResponse getById(String recordingId, Long currentUserId);
+
+  RecordingTranslationSource requireTranslationSource(String recordingId, Long currentUserId);
 
   void cleanupStaleUploads();
 }

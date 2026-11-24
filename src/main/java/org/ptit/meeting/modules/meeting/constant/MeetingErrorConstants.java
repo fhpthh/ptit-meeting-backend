@@ -4,6 +4,7 @@ package org.ptit.meeting.modules.meeting.constant;
  * Message keys for business errors owned by the meeting module.
  */
 public final class MeetingErrorConstants {
+  public static final String RECORDING_NOT_READY = "error.meeting.recording.not-ready";
 
   public static final String RUNTIME_SESSION_EXPIRED = "error.meeting.runtime-session.expired";
 
