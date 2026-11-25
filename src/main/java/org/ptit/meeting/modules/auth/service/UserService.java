@@ -1,4 +1,3 @@
-
 package org.ptit.meeting.modules.auth.service;
 
 import java.util.Collection;
@@ -32,4 +31,6 @@ public interface UserService {
   User syncUserProfile(User user, String fullName, String code);
 
   User findOrCreateStudent(String studentCode, String fullName, String department, String email);
+
+  User findOrCreateLecturer(String code, String fullName, String email, String department);
 }

@@ -326,6 +326,86 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional
+  public User findOrCreateLecturer(String code, String fullName, String email, String department) {
+    String cleanCode = code != null ? code.trim() : null;
+    String cleanEmail = email != null ? email.trim().toLowerCase() : null;
+    String cleanFullName = fullName != null ? fullName.trim() : null;
+
+    if (cleanCode == null && cleanEmail == null) {
+      throw BusinessException.invalidInput("validation.lecturer.code.required");
+    }
+
+    // 1. Tìm kiếm giảng viên đã tồn tại theo mã GV hoặc email
+    Optional<User> existingOpt = Optional.empty();
+    if (cleanCode != null) {
+      existingOpt = userRepository.findByCode(cleanCode);
+    }
+    if (existingOpt.isEmpty() && cleanEmail != null) {
+      existingOpt = userRepository.findByEmail(cleanEmail);
+    }
+
+    // 2. Nếu đã tồn tại, đồng bộ bổ sung thông tin
+    if (existingOpt.isPresent()) {
+      User existing = existingOpt.get();
+      boolean modified = false;
+
+      if (cleanCode != null && (existing.getCode() == null || !cleanCode.equalsIgnoreCase(existing.getCode()))) {
+        existing.setCode(cleanCode);
+        modified = true;
+      }
+      if (cleanFullName != null && !cleanFullName.equals(existing.getFullName())) {
+        existing.setFullName(cleanFullName);
+        modified = true;
+      }
+      if (cleanEmail != null && !cleanEmail.equalsIgnoreCase(existing.getEmail())) {
+        existing.setEmail(cleanEmail);
+        modified = true;
+      }
+      if (department != null && existing.getDepartment() == null) {
+        existing.setDepartment(department.trim());
+        modified = true;
+      }
+      // Đảm bảo có mật khẩu khởi tạo nếu trước đó chưa có
+      if (existing.getPasswordHash() == null) {
+        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
+        existing.setMustChangePassword(true);
+        modified = true;
+      }
+      if (modified) {
+        existing = userRepository.save(existing);
+      }
+      enrichAuthorities(existing);
+      return existing;
+    }
+
+    // 3. Khởi tạo tài khoản Giảng viên mới
+    User newLecturer = User.builder()
+        .code(cleanCode)
+        .fullName(cleanFullName != null ? cleanFullName : cleanCode)
+        .email(cleanEmail)
+        .department(department)
+        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD))
+        .accountType(AccountType.LECTURER)
+        .status(UserStatus.ACTIVE)
+        .mustChangePassword(true) // Bắt buộc đổi MK ở lần đăng nhập tay đầu tiên
+        .build();
+
+    User saved = userRepository.save(newLecturer);
+
+    // Gán vai trò ROLE_LECTURER
+    roleRepository.findByCode(RoleCode.ROLE_LECTURER.name()).ifPresent(role -> {
+      userRoleRepository.save(UserRole.builder()
+          .userId(saved.getId())
+          .roleId(role.getId())
+          .build());
+    });
+
+    enrichAuthorities(saved);
+    return saved;
+  }
+
+  @Override
+  @Transactional
   public User changePassword(Long userId, String oldPassword, String newPassword) {
     log.info("(changePassword) userId: {}", userId);
 
