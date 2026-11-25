@@ -361,7 +361,7 @@ public class UserServiceImpl implements UserService {
         existing.setEmail(cleanEmail);
         modified = true;
       }
-      if (department != null && existing.getDepartment() == null) {
+      if (department != null && !department.trim().equalsIgnoreCase(existing.getDepartment())) {
         existing.setDepartment(department.trim());
         modified = true;
       }

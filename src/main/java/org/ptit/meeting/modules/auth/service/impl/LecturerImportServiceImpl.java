@@ -62,7 +62,16 @@ public class LecturerImportServiceImpl implements LecturerImportService {
       // 2. Đọc từng dòng dữ liệu
       for (int r = headerRow + 1; r <= sheet.getLastRowNum(); r++) {
         Row row = sheet.getRow(r);
-        if (row == null || isRowEmpty(row)) {
+        if (row == null) {
+          continue;
+        }
+
+        String fullName = getCellVal(row, colMap.get("fullName"));
+        String code = getCellVal(row, colMap.get("code"));
+        String email = getCellVal(row, colMap.get("email"));
+
+        // Bỏ qua dòng trống hoàn toàn hoặc dòng chỉ có mỗi cột STT nhưng không có Tên và Mã
+        if (fullName.isBlank() && code.isBlank() && email.isBlank()) {
           continue;
         }
 
@@ -70,10 +79,6 @@ public class LecturerImportServiceImpl implements LecturerImportService {
         int rowNumber = r + 1;
 
         try {
-          String fullName = getCellVal(row, colMap.get("fullName"));
-          String code = getCellVal(row, colMap.get("code"));
-          String email = getCellVal(row, colMap.get("email"));
-
           if (fullName.isBlank() || code.isBlank()) {
             errors.add(new LecturerImportResponse.RowError(rowNumber, code,
                 "Thiếu họ tên hoặc mã giảng viên"));
