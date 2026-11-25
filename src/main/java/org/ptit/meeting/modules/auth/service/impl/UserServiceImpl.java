@@ -182,7 +182,7 @@ public class UserServiceImpl implements UserService {
           }
           // Khởi tạo mật khẩu mặc định nếu tài khoản sinh viên trước đó chưa có mật khẩu
           if (existingUser.getAccountType() == AccountType.STUDENT && existingUser.getPasswordHash() == null) {
-            existingUser.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+            existingUser.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
             existingUser.setMustChangePassword(true);
             modified = true;
           }
@@ -196,7 +196,7 @@ public class UserServiceImpl implements UserService {
         .orElseGet(() -> {
           log.info("(findOrCreateByEmail) JIT provisioning new user: {}", email);
           String defaultPasswordHash = (accountType == AccountType.STUDENT)
-              ? passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD)
+              ? passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD)
               : null;
           boolean mustChangePassword = (accountType == AccountType.STUDENT);
 
@@ -289,7 +289,7 @@ public class UserServiceImpl implements UserService {
       }
       // Đảm bảo sinh viên luôn có mật khẩu mặc định Ptit@123 nếu trước đó chưa có mật khẩu
       if (existing.getPasswordHash() == null) {
-        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
         existing.setMustChangePassword(true);
         modified = true;
       }
@@ -306,7 +306,7 @@ public class UserServiceImpl implements UserService {
         .fullName(fullName != null && !fullName.isBlank() ? fullName.trim() : normalizedCode)
         .email(targetEmail)
         .department(department != null ? department.trim() : null)
-        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD))
+        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD))
         .accountType(AccountType.STUDENT)
         .status(UserStatus.ACTIVE)
         .mustChangePassword(true) // Yêu cầu đổi mật khẩu ở lần đăng nhập thường đầu tiên
