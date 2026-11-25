@@ -197,33 +197,26 @@ một danh sách LiveKit dùng chung cho đồng bộ quyền và kiểm tra d�
 lượt gọi LiveKit riêng cho mỗi sinh viên hoặc scheduler thứ hai. Call timeout SDK là
 10 giây. Lỗi lấy danh sách không được xem là phòng trống và không quyết định kết thúc.
 
-Sau scheduled_end, giảng viên còn trong phòng thì phiên tiếp tục ACTIVE, kể cả sau
-mốc scheduled_end + 1 giờ. Vắng giảng viên ít nhất 2 phút: nếu phòng trống thì kết
-thúc; nếu còn sinh viên thì chỉ kết thúc khi đã qua mốc scheduled_end + 1 giờ. Ví dụ
-lịch hết 10:00, giảng viên rời 11:20 thì kết thúc khoảng 11:22 ở lượt quét kế tiếp.
+Từ scheduled_end, nếu không còn người trong phòng thì kết thúc ngay ở lượt quét
+phát hiện phòng trống. Nếu còn người thì giữ ACTIVE tối đa đến scheduled_end + 30
+phút, không phụ thuộc vai trò hay sự có mặt của giảng viên/OWNER/HOST. Mốc 30 phút
+tính từ giờ kết thúc theo lịch, không reset khi có người vào lại. Ví dụ lịch hết
+10:00: phòng trống lúc 10:05 thì kết thúc ở lượt quét kế tiếp; còn người liên tục
+thì kết thúc ở lượt quét từ 10:30. Bot AI được xác thực qua AiWorkerAuthorizationService
+không được tính là người và không giữ phiên mở khi mọi người đã rời phòng.
 Trước scheduled_end không tự kết thúc vì phòng trống. Cả kết thúc thủ công và tự
 động đều ghi actual_end bằng thời điểm kết thúc thực tế, không ghi đè scheduled_end.
 
-Lớp gắn TKB xác định giảng viên bằng phân công hiện hành ở ClassSection; sinh viên
-có role HOST không giữ lớp mở mãi. Phòng độc lập dùng thành viên OWNER/HOST còn hiệu
-lực. Không dựa vào tên hoặc metadata role do client cung cấp. Redis giữ trạng thái
-hiện diện trong một key `mtg:ha:{sessionId}`, TTL 24 giờ. Giá trị timestamp milliseconds
-là lần đầu quan sát giảng viên vắng sau giờ; các lượt quét sau giữ nguyên mốc này.
-Khi quan sát giảng viên có mặt hoặc webhook admission hợp lệ sau giờ, ghi marker
-`p:{UUID}` mới để reset khoảng đệm và vô hiệu hóa snapshot cũ. Đọc trạng thái Redis
-trước khi lấy danh sách LiveKit; Lua chỉ ghi/đọc mốc vắng nếu trạng thái vẫn khớp.
-Do đó webhook vào lại vẫn vô hiệu hóa snapshot cũ dù không đổi `row_version` trong DB.
-Phiên kết thúc xóa key trong cleanup sau commit. Backend restart dùng tiếp key còn
-tồn tại; Redis mất key thì bắt đầu chờ lại 2 phút. Redis lỗi không được xem là đã
-đủ khoảng đệm: bỏ qua xét dạy thêm và thử lại ở lượt quét tiếp theo. Đồng bộ quyền
-LiveKit vẫn tiếp tục bằng cùng danh sách participant dù đọc Redis hoặc xét dạy thêm lỗi.
-Kiểm tra version và khóa lại phiên trước khi đổi trạng thái. Việc lấy danh sách
+Không còn service theo dõi host, khoảng đệm reconnect, Lua hoặc key Redis hiện diện.
+Các key hiện diện cũ tự hết TTL 24 giờ, không cần migration hay quét xóa Redis.
+Đồng bộ quyền LiveKit vẫn tiếp tục bằng cùng danh sách participant nếu xét dạy thêm
+lỗi. Kiểm tra version và khóa lại phiên trước khi đổi trạng thái. Việc lấy danh sách
 LiveKit diễn ra trước transaction kiểm tra dạy thêm, không giữ khóa phiên khi chờ mạng.
 
 `meeting_sessions.cleanup_pending` lưu công việc dọn còn dang dở, không
 trả trường này qua DTO. Chuyển ENDED và đánh dấu pending trong cùng transaction.
-Sau commit, service xóa phòng LiveKit trước, rồi dọn chat/giơ tay; chỉ bỏ cờ sau khi
-tất cả thành công, kể cả xóa key hiện diện Redis. Lỗi được log và lượt quét sau thử
+Sau commit, service xóa phòng LiveKit trước, dừng AI realtime rồi dọn chat/giơ tay;
+chỉ bỏ cờ sau khi tất cả thành công. Lỗi được log và lượt quét sau thử
 lại. LiveKit trả 404 được xem là đã xóa. Các bước có thể chạy lại sau crash, không
 xóa điểm danh hoặc bản ghi.
 Webhook người vào phiên ENDED bằng token cũ đánh dấu pending và kích hoạt lại dọn
@@ -239,8 +232,8 @@ schema thủ công chạy một lần `src/main/resources/db/sql/migrate_meeting
 trước khi triển khai; script cũng đánh dấu các phiên ENDED cũ để dọn lại. Không chạy
 script thêm cột sau khi Hibernate đã tự thêm cùng cột/index. Hibernate chỉ cập nhật
 schema, không tự chạy câu UPDATE đánh dấu phiên ENDED cũ; nếu cần dọn các phiên này
-thì chạy riêng câu UPDATE trong script. Mốc vắng 2 phút chỉ lưu Redis, không thêm
-cột hoặc migration dạy thêm. Nếu DB đã có cột mốc vắng từ bản triển khai trước,
+thì chạy riêng câu UPDATE trong script. Quy tắc dạy thêm không cần thêm cột hoặc
+migration. Nếu DB đã có cột mốc vắng từ bản triển khai trước,
 cột đó không còn được mapping/sử dụng; Hibernate update không tự xóa cột cũ.
 Không thêm field kỹ thuật vào DTO.
 
@@ -252,10 +245,6 @@ chủ bản ghi và quyền hiện hành. Đã bỏ polling trong phòng sau gi�
 trạng thái, không polling mỗi 5 giây trong suốt thời gian dạy thêm. Focus refresh và
 kiểm tra phiên khi vào lại vẫn dùng API hiện có. Terminal status xóa marker reload.
 Link vào lớp trên TKB vẫn hiện nếu session LIVE dù đã qua giờ dự kiến.
-
-Theo yêu cầu người dùng, không giữ các file test bổ sung cho thay đổi chuyển mốc
-vắng sang Redis. Đây là ngoại lệ có chủ đích với quy tắc bổ sung test trong
-`docs/03-implementation-rules.md`.
 
 TKB tạo/cập nhật entity session dùng chung qua luồng import hiện có. Field
 `scheduleOccurrenceId` trên entity/response được giữ để tương thích dữ liệu và API.
