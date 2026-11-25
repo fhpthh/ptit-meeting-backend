@@ -1,6 +1,5 @@
 package org.ptit.meeting.modules.meeting.service.impl;
 
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
@@ -42,16 +41,6 @@ public class MeetingAuthorizationServiceImpl implements MeetingAuthorizationServ
         if (role != MeetingRole.OWNER && role != MeetingRole.HOST) {
             throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
         }
-    }
-
-    @Override
-    public Set<Long> getRuntimeSessionHostIds(String roomId) {
-        Room room = roomRepository.findByPublicId(roomId)
-                .orElseThrow(() -> BusinessException.notExisted(MeetingErrorConstants.ROOM_NOT_FOUND));
-        if (room.getClassSectionId() != null) {
-            return roomRepository.findClassLecturerId(roomId).map(Set::of).orElse(Set.of());
-        }
-        return Set.copyOf(memberRepository.findActiveHostUserIds(roomId));
     }
 
     private ClassEnrollment findActiveMember(String roomId, Long userId) {

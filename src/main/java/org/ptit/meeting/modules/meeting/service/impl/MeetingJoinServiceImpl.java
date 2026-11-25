@@ -34,7 +34,6 @@ import org.ptit.meeting.modules.meeting.event.MeetingRuntimeSessionEndedEvent;
 import org.ptit.meeting.modules.meeting.repository.MeetingRoomRepository;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
-import org.ptit.meeting.modules.meeting.service.MeetingHostPresenceService;
 import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
@@ -61,7 +60,6 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private final TransactionTemplate transactionTemplate;
   private final ApplicationEventPublisher eventPublisher;
   private final MeetingRuntimeSessionService runtimeSessionService;
-  private final MeetingHostPresenceService hostPresenceService;
   private final AiWorkerAuthorizationService aiWorkerAuthorizationService;
 
   @Override
@@ -243,10 +241,6 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
       return false;
     }
     updateAccessIfChanged(participant, grant);
-    if (!session.getScheduledEndAt().isAfter(Instant.now())
-        && authorizationService.getRuntimeSessionHostIds(room.getPublicId()).contains(userId)) {
-      hostPresenceService.markPresent(runtimeSessionId);
-    }
     return true;
   }
 
@@ -265,9 +259,8 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     for (MeetingSession session : runtimeSessionRepository.findAllByStatus(SessionStatus.LIVE)) {
       try {
         // Share one LiveKit snapshot between overtime checks and permission reconciliation.
-        String observedHostState = readOvertimeHostState(session);
         List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
-        reconcileOvertime(session, observedHostState, participants);
+        reconcileOvertime(session, participants);
         transactionTemplate.executeWithoutResult(status -> {
           Room room = session.getRoom();
           synchronizeSession(session, room, roomService.getSetting(room.getPublicId()), participants);
@@ -279,28 +272,16 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     }
   }
 
-  private String readOvertimeHostState(MeetingSession session) {
-    if (session.getScheduledEndAt().isAfter(Instant.now())) {
-      return null;
-    }
-    try {
-      return hostPresenceService.getState(session.getPublicId());
-    } catch (RuntimeException exception) {
-      log.warn("Unable to read host presence; access reconciliation will continue: runtimeSessionId={}",
-          session.getPublicId(), exception);
-      return null;
-    }
-  }
-
-  private void reconcileOvertime(MeetingSession session, String observedHostState,
+  private void reconcileOvertime(MeetingSession session,
       List<LiveKitParticipantSnapshot> participants) {
-    // Null means unavailable/not due; an empty Redis state is a valid first observation.
-    if (observedHostState == null) {
+    if (session.getScheduledEndAt().isAfter(Instant.now())) {
       return;
     }
     try {
+      boolean hasParticipants = participants.stream()
+          .anyMatch(value -> !aiWorkerAuthorizationService.isAuthorized(session.getPublicId(), value));
       runtimeSessionService.reconcileOvertime(
-          session.getPublicId(), session.getVersion(), observedHostState, participants
+          session.getPublicId(), session.getVersion(), hasParticipants
       );
     } catch (RuntimeException exception) {
       log.warn("Unable to reconcile overtime; access reconciliation will continue: runtimeSessionId={}",

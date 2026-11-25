@@ -1,10 +1,8 @@
 package org.ptit.meeting.modules.meeting.service;
 
-import org.ptit.meeting.integration.livekit.dto.LiveKitParticipantSnapshot;
+import java.util.List;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRuntimeSessionCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRuntimeSessionResponse;
-
-import java.util.List;
 
 public interface MeetingRuntimeSessionService {
 
@@ -26,11 +24,11 @@ public interface MeetingRuntimeSessionService {
 
   void reconcileSessions();
 
+  /** Reconcile a LiveKit snapshot; authorized AI workers do not count as participants. */
   void reconcileOvertime(
       String runtimeSessionId,
       Long observedVersion,
-      String observedHostState,
-      List<LiveKitParticipantSnapshot> participants
+      boolean hasParticipants
   );
 
   void cleanupEndedSession(String runtimeSessionId);
