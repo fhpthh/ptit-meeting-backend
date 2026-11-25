@@ -63,7 +63,7 @@ class UserServiceTest {
     when(userRepository.findByEmail(email.toLowerCase())).thenReturn(Optional.empty());
     when(userRepository.findByCode(code)).thenReturn(Optional.empty());
     when(userRepository.findByCode("B22CN356")).thenReturn(Optional.empty());
-    when(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD)).thenReturn("$2a$10$encodedDefaultPassword");
+    when(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD)).thenReturn("$2a$10$encodedDefaultPassword");
     when(roleRepository.findByCode(RoleCode.ROLE_STUDENT.name())).thenReturn(Optional.of(studentRole));
 
     when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
