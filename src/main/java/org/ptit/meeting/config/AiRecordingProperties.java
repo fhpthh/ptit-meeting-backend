@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class AiRecordingProperties {
   private boolean enabled;
   private boolean completionEnabled;
+  private Dispatch dispatch = new Dispatch();
   private ArtifactStorage artifactStorage = new ArtifactStorage();
   private String workerSecret;
   private long leaseSeconds = 120;
@@ -36,5 +37,15 @@ public class AiRecordingProperties {
     private String accessKey;
     private String secretKey;
     private String region = "us-east-1";
+  }
+
+  @Getter
+  @Setter
+  public static class Dispatch {
+    private boolean enabled;
+    private String stream = "ptit:recording:dispatch:v1";
+    private int maxLength = 10000;
+    private int batchSize = 20;
+    private long reconcileSeconds = 30;
   }
 }

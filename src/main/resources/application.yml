@@ -53,6 +53,13 @@ application:
   ai-recording:
     enabled: ${AI_RECORDING_TRANSLATION_ENABLED:false}
     completion-enabled: ${AI_RECORDING_COMPLETION_ENABLED:false}
+    dispatch:
+      enabled: ${AI_RECORDING_DISPATCH_ENABLED:false}
+      stream: ${AI_RECORDING_DISPATCH_STREAM:ptit:recording:dispatch:v1}
+      max-length: ${AI_RECORDING_DISPATCH_MAX_LENGTH:10000}
+      batch-size: ${AI_RECORDING_DISPATCH_BATCH_SIZE:20}
+      reconcile-seconds: ${AI_RECORDING_DISPATCH_RECONCILE_SECONDS:30}
+      poll-interval-ms: ${AI_RECORDING_DISPATCH_POLL_INTERVAL_MS:5000}
     artifact-storage:
       enabled: ${AI_RECORDING_ARTIFACT_STORAGE_ENABLED:false}
       bucket: ${AI_RECORDING_ARTIFACT_BUCKET:}

@@ -30,4 +30,11 @@ public interface RecordingTranslationJobRepository
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select job from RecordingTranslationJob job where job.id = :id")
   Optional<RecordingTranslationJob> findByIdForUpdate(@Param("id") String id);
+
+  @Query(
+      "select j.id from RecordingTranslationJob j where"
+          + " j.status=org.ptit.meeting.modules.ai.constant.enums.RecordingTranslationStatus.PROCESSING"
+          + " and j.leaseUntil<=:now order by j.leaseUntil,j.id")
+  List<String> expired(
+      @Param("now") java.time.Instant now, org.springframework.data.domain.Pageable page);
 }

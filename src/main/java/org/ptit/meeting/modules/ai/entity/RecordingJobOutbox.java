@@ -39,4 +39,8 @@ public class RecordingJobOutbox extends BaseEntity {
     this.dispatchVersion = dispatchVersion;
     this.availableAt = availableAt;
   }
+
+  public void markPublished(Instant time) {
+    publishedAt = time;
+  }
 }
