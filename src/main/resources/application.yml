@@ -53,6 +53,10 @@ application:
   ai-recording:
     enabled: ${AI_RECORDING_TRANSLATION_ENABLED:false}
     completion-enabled: ${AI_RECORDING_COMPLETION_ENABLED:false}
+    provisioning:
+      enabled: ${AI_RECORDING_PROVISIONING_ENABLED:false}
+      worker-id: ${AI_RECORDING_PROVISIONING_WORKER_ID:}
+      service-secret: ${AI_RECORDING_PROVISIONING_SERVICE_SECRET:}
     dispatch:
       enabled: ${AI_RECORDING_DISPATCH_ENABLED:false}
       stream: ${AI_RECORDING_DISPATCH_STREAM:ptit:recording:dispatch:v1}

@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class AiRecordingProperties {
   private boolean enabled;
   private boolean completionEnabled;
+  private Provisioning provisioning = new Provisioning();
   private Dispatch dispatch = new Dispatch();
   private ArtifactStorage artifactStorage = new ArtifactStorage();
   private String workerSecret;
@@ -47,5 +48,13 @@ public class AiRecordingProperties {
     private int maxLength = 10000;
     private int batchSize = 20;
     private long reconcileSeconds = 30;
+  }
+
+  @Getter
+  @Setter
+  public static class Provisioning {
+    private boolean enabled;
+    private String workerId;
+    private String serviceSecret;
   }
 }
