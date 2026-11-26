@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "application.ai-recording")
 public class AiRecordingProperties {
   private boolean enabled;
+  private boolean completionEnabled;
+  private ArtifactStorage artifactStorage = new ArtifactStorage();
   private String workerSecret;
   private long leaseSeconds = 120;
   private long tokenTtlSeconds = 600;
@@ -24,4 +26,15 @@ public class AiRecordingProperties {
   private String modelManifestSha256;
   private String terminologyProfile = "whisper_ai";
   private Map<String, String> terminologyProfiles = new HashMap<>();
+
+  @Getter
+  @Setter
+  public static class ArtifactStorage {
+    private boolean enabled;
+    private String bucket;
+    private String endpoint;
+    private String accessKey;
+    private String secretKey;
+    private String region = "us-east-1";
+  }
 }

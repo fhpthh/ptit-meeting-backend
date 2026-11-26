@@ -52,6 +52,14 @@ azure:
 application:
   ai-recording:
     enabled: ${AI_RECORDING_TRANSLATION_ENABLED:false}
+    completion-enabled: ${AI_RECORDING_COMPLETION_ENABLED:false}
+    artifact-storage:
+      enabled: ${AI_RECORDING_ARTIFACT_STORAGE_ENABLED:false}
+      bucket: ${AI_RECORDING_ARTIFACT_BUCKET:}
+      endpoint: ${AI_RECORDING_ARTIFACT_ENDPOINT:}
+      region: ${AI_RECORDING_ARTIFACT_REGION:us-east-1}
+      access-key: ${AI_RECORDING_ARTIFACT_ACCESS_KEY:}
+      secret-key: ${AI_RECORDING_ARTIFACT_SECRET_KEY:}
     worker-secret: ${AI_RECORDING_WORKER_SECRET:}
     profile-id: ${AI_RECORDING_PROFILE_ID:saved-media-v1}
     profile-version: ${AI_RECORDING_PROFILE_VERSION:1}

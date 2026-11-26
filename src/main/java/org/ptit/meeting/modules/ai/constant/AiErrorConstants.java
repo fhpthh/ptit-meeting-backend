@@ -12,6 +12,8 @@ public final class AiErrorConstants {
   public static final String RECORDING_INVALID = "error.ai.recording.invalid";
   public static final String RECORDING_WORKER_TOKEN = "error.ai.recording.worker-token";
 
-  private AiErrorConstants() {
-  }
+  public static final String RECORDING_RESULT_INVALID = "error.ai.recording.result-invalid";
+  public static final String RECORDING_RESULT_STORAGE = "error.ai.recording.result-storage";
+
+  private AiErrorConstants() {}
 }
