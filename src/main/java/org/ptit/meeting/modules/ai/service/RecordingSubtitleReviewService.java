@@ -1,8 +1,8 @@
 package org.ptit.meeting.modules.ai.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import org.ptit.meeting.modules.ai.dto.request.RecordingSubtitleReviewRequest.Save;
 import org.ptit.meeting.modules.ai.dto.response.RecordingSubtitleReviewResponse;
+import tools.jackson.databind.JsonNode;
 
 public interface RecordingSubtitleReviewService {
   RecordingSubtitleReviewResponse get(String recordingId, Long userId);
