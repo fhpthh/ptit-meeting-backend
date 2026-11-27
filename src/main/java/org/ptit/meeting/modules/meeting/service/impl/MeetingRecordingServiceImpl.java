@@ -415,7 +415,7 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
       String meetingRoomId,
       Long currentUserId
   ) {
-    authorizationService.requireActiveMember(meetingRoomId, currentUserId);
+    authorizationService.requireRoomAccess(meetingRoomId, currentUserId);
     moderationService.requireNotBanned(runtimeSessionId, currentUserId);
   }
 

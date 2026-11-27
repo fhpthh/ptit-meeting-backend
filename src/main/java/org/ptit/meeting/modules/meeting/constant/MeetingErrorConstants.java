@@ -38,6 +38,8 @@ public final class MeetingErrorConstants {
   public static final String ROOM_FULL = "error.meeting.room.full";
   public static final String PROVIDER_UNAVAILABLE = "error.meeting.provider-unavailable";
   public static final String SCREEN_SHARE_BUSY = "error.meeting.screen-share.busy";
+  public static final String EVENT_SPEAKING_NOT_SUPPORTED =
+      "error.meeting.event-speaking.not-supported";
   public static final String WEBHOOK_SIGNATURE_INVALID =
       "error.meeting.webhook.signature-invalid";
   public static final String WEBHOOK_PAYLOAD_INVALID =

@@ -25,6 +25,7 @@ import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomType;
 import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingJoinResponse;
 import org.ptit.meeting.modules.meeting.entity.MeetingRoomSetting;
@@ -38,7 +39,6 @@ import org.ptit.meeting.modules.meeting.service.MeetingJoinService;
 import org.ptit.meeting.modules.meeting.service.MeetingModerationService;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
 import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
-import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +48,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @RequiredArgsConstructor
 public class MeetingJoinServiceImpl implements MeetingJoinService {
+
+  private static final String EVENT_SPEAKING_SID = "eventSpeakingSid";
 
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final MeetingRoomRepository roomRepository;
@@ -66,7 +68,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   @Transactional
   public MeetingJoinResponse join(String runtimeSessionId, Long currentUserId) {
     MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    ClassEnrollment member = authorizationService.requireActiveMember(
+    MeetingRole role = authorizationService.requireRoomAccess(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
@@ -76,13 +78,13 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     Room room = findRoom(runtimeSession.getMeetingRoomId());
     requireActiveRoom(room);
     MeetingRoomSetting setting = roomService.getSetting(room.getPublicId());
-    requireAllowedJoinTime(runtimeSession, setting, member.getRole());
+    requireAllowedJoinTime(runtimeSession, setting, role);
 
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
 
     String participantIdentity = "user-" + currentUserId;
-    LiveKitJoinGrant grant = createGrant(runtimeSession, room, setting, member, user, false);
+    LiveKitJoinGrant grant = createGrant(runtimeSession, room, setting, role, user, false, null);
     requireCapacity(runtimeSession, setting, participantIdentity);
     LiveKitTokenResult tokenResult = createJoinToken(grant);
 
@@ -93,23 +95,28 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
         tokenResult.participantToken(),
         tokenResult.expiresAt(),
         participantIdentity,
-        member.getRole(),
+        role,
         true,
         grant.canPublishMicrophone(),
         grant.canPublishCamera(),
-        screenShareAllowed(member.getRole(), setting)
+        screenShareAllowed(role, setting)
     );
   }
 
   private LiveKitJoinGrant createGrant(MeetingSession session, Room room, MeetingRoomSetting setting,
-      ClassEnrollment member, User user, boolean screenShareAcquired) {
-    boolean host = member.getRole() == MeetingRole.OWNER || member.getRole() == MeetingRole.HOST;
-    boolean participant = member.getRole() != MeetingRole.VIEWER;
+      MeetingRole role, User user, boolean screenShareAcquired, String eventSpeakingSid) {
+    boolean host = role == MeetingRole.OWNER || role == MeetingRole.HOST;
+    boolean participant = role != MeetingRole.VIEWER;
+    String speakingSid = room.getRoomType() == RoomType.EVENT && role == MeetingRole.VIEWER
+        && (setting.isParticipantMicEnabled() || setting.isParticipantCameraEnabled())
+        ? eventSpeakingSid : null;
+    boolean mediaAllowed = participant || speakingSid != null;
     return new LiveKitJoinGrant(session.getProviderRoomName(), "user-" + user.getId(),
-        user.getFullName(), createParticipantMetadata(session, room, member, setting), true,
-        host || participant && setting.isParticipantMicEnabled(),
-        host || participant && setting.isParticipantCameraEnabled(),
-        screenShareAcquired && screenShareAllowed(member.getRole(), setting), true);
+        user.getFullName(), createParticipantMetadata(session, room, role, user.getId(), setting,
+            speakingSid), true,
+        host || mediaAllowed && setting.isParticipantMicEnabled(),
+        host || mediaAllowed && setting.isParticipantCameraEnabled(),
+        screenShareAcquired && screenShareAllowed(role, setting), true);
   }
 
   @Override
@@ -124,32 +131,25 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     Room room = findRoom(session.getMeetingRoomId());
     requireActiveRoom(room);
     MeetingRoomSetting setting = roomService.getSetting(room.getPublicId());
-    ClassEnrollment member = authorizationService.requireActiveMember(
+    MeetingRole role = authorizationService.requireRoomAccess(
         room.getPublicId(), currentUserId);
     moderationService.requireNotBanned(runtimeSessionId, currentUserId);
-    if (!screenShareAllowed(member.getRole(), setting)) {
+    if (!screenShareAllowed(role, setting)) {
       throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
     }
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
     try {
       List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
-      LiveKitParticipantSnapshot participant = participants.stream()
-          .filter(value -> value.identity().equals("user-" + currentUserId))
-          .filter(value -> value.sid().equals(participantSid))
-          .findFirst()
-          .orElseThrow(() -> BusinessException.invalidInput(
-              MeetingErrorConstants.MODERATION_PARTICIPANT_NOT_CONNECTED));
+      LiveKitParticipantSnapshot participant = requireConnectedParticipant(
+          participants, currentUserId, participantSid);
       boolean occupied = participants.stream().anyMatch(value ->
           !value.sid().equals(participant.sid()) && value.publishSources().contains("screen_share"));
       if (occupied) {
         throw BusinessException.existed(MeetingErrorConstants.SCREEN_SHARE_BUSY);
       }
-      LiveKitJoinGrant grant = createGrant(session, room, setting, member, user, true);
-      if (!liveKitGateway.updateParticipant(grant)) {
-        throw BusinessException.invalidInput(
-            MeetingErrorConstants.MODERATION_PARTICIPANT_NOT_CONNECTED);
-      }
+      LiveKitJoinGrant grant = createGrant(session, room, setting, role, user, true, null);
+      updateConnectedParticipant(grant);
     } catch (LiveKitIntegrationException exception) {
       throw new BusinessException(
           StatusCode.ERROR_IN_BACKEND, MeetingErrorConstants.PROVIDER_UNAVAILABLE);
@@ -180,6 +180,58 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     } catch (LiveKitIntegrationException exception) {
       throw new BusinessException(
           StatusCode.ERROR_IN_BACKEND, MeetingErrorConstants.PROVIDER_UNAVAILABLE);
+    }
+  }
+
+  @Override
+  @Transactional
+  public void setEventSpeakingPermission(String runtimeSessionId, Long participantUserId,
+      String participantSid, boolean enabled, Long currentUserId) {
+    MeetingSession session = findRuntimeSessionForUpdate(runtimeSessionId);
+    Room room = findRoom(session.getMeetingRoomId());
+    authorizationService.requireRuntimeSessionHost(room.getPublicId(), currentUserId);
+    moderationService.requireNotBanned(runtimeSessionId, currentUserId);
+    userService.validateUserStatus(userService.getUserById(currentUserId));
+    requireActiveRuntimeSession(session);
+    requireActiveRoom(room);
+    if (room.getRoomType() != RoomType.EVENT) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.EVENT_SPEAKING_NOT_SUPPORTED);
+    }
+    MeetingRole role = authorizationService.requireRoomAccess(room.getPublicId(), participantUserId);
+    if (role != MeetingRole.VIEWER) {
+      throw BusinessException.unauthorized(MeetingErrorConstants.MODERATION_TARGET_PROTECTED);
+    }
+    moderationService.requireNotBanned(runtimeSessionId, participantUserId);
+    MeetingRoomSetting setting = roomService.getSetting(room.getPublicId());
+    if (enabled && !setting.isParticipantMicEnabled() && !setting.isParticipantCameraEnabled()) {
+      throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
+    }
+    User user = userService.getUserById(participantUserId);
+    userService.validateUserStatus(user);
+    try {
+      LiveKitParticipantSnapshot participant = requireConnectedParticipant(
+          orderedParticipants(session), participantUserId, participantSid);
+      updateConnectedParticipant(createGrant(session, room, setting, role, user, false,
+          enabled ? participant.sid() : null));
+    } catch (LiveKitIntegrationException exception) {
+      throw new BusinessException(
+          StatusCode.ERROR_IN_BACKEND, MeetingErrorConstants.PROVIDER_UNAVAILABLE);
+    }
+  }
+
+  private LiveKitParticipantSnapshot requireConnectedParticipant(
+      List<LiveKitParticipantSnapshot> participants, Long userId, String participantSid) {
+    return participants.stream()
+        .filter(participant -> participant.identity().equals("user-" + userId))
+        .filter(participant -> participant.sid().equals(participantSid))
+        .findFirst()
+        .orElseThrow(() -> BusinessException.invalidInput(
+            MeetingErrorConstants.MODERATION_PARTICIPANT_NOT_CONNECTED));
+  }
+
+  private void updateConnectedParticipant(LiveKitJoinGrant grant) {
+    if (!liveKitGateway.updateParticipant(grant)) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.MODERATION_PARTICIPANT_NOT_CONNECTED);
     }
   }
 
@@ -231,7 +283,7 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     boolean screenShareAcquired = participant.publishSources().contains("screen_share")
         && participants.stream().noneMatch(value -> !value.sid().equals(participant.sid())
             && value.publishSources().contains("screen_share"));
-    LiveKitJoinGrant grant = currentGrant(session, room, setting, userId, screenShareAcquired);
+    LiveKitJoinGrant grant = currentGrant(session, room, setting, participant, screenShareAcquired);
     boolean withinCapacity = participants.stream()
         .filter(value -> !aiWorkerAuthorizationService.isAuthorized(session.getPublicId(), value))
         .limit(setting.getMaxParticipants())
@@ -249,7 +301,8 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     Room room = findRoom(roomId);
     MeetingRoomSetting setting = roomService.getSetting(roomId);
     for (MeetingSession session : runtimeSessionRepository.findAllByRoomIdAndStatus(room.getId(), SessionStatus.LIVE)) {
-      List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
+      List<LiveKitParticipantSnapshot> participants = room.getRoomType() == RoomType.EVENT
+          ? List.of() : orderedParticipants(session);
       transactionTemplate.executeWithoutResult(status -> synchronizeSession(session, room, setting, participants));
     }
   }
@@ -258,6 +311,14 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   public void reconcileActiveSessions() {
     for (MeetingSession session : runtimeSessionRepository.findAllByStatus(SessionStatus.LIVE)) {
       try {
+        if (session.getRoom().getRoomType() == RoomType.EVENT) {
+          List<LiveKitParticipantSnapshot> participants = transactionTemplate.execute(status -> {
+            Room room = session.getRoom();
+            return synchronizeSession(session, room, roomService.getSetting(room.getPublicId()), List.of());
+          });
+          reconcileOvertime(session, participants);
+          continue;
+        }
         // Share one LiveKit snapshot between overtime checks and permission reconciliation.
         List<LiveKitParticipantSnapshot> participants = orderedParticipants(session);
         reconcileOvertime(session, participants);
@@ -289,11 +350,16 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
     }
   }
 
-  private void synchronizeSession(MeetingSession session, Room room, MeetingRoomSetting setting,
+  private List<LiveKitParticipantSnapshot> synchronizeSession(
+      MeetingSession session, Room room, MeetingRoomSetting setting,
       List<LiveKitParticipantSnapshot> participants) {
     session = findRuntimeSessionForUpdate(session.getPublicId());
     if (session.getRuntimeStatus() != MeetingRuntimeSessionStatus.ACTIVE) {
-      return;
+      return List.of();
+    }
+    if (room.getRoomType() == RoomType.EVENT) {
+      // Read temporary grants under the same lock as grant/revoke to avoid restoring stale access.
+      participants = orderedParticipants(session);
     }
     int admitted = 0;
     boolean screenShareAssigned = false;
@@ -301,9 +367,8 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
       if (aiWorkerAuthorizationService.isAuthorized(session.getPublicId(), participant)) {
         continue;
       }
-      Long userId = userIdFromIdentity(participant.identity());
-      LiveKitJoinGrant grant = userId == null || room.getStatus() != RoomStatus.ACTIVE
-          ? null : currentGrant(session, room, setting, userId,
+      LiveKitJoinGrant grant = room.getStatus() != RoomStatus.ACTIVE
+          ? null : currentGrant(session, room, setting, participant,
               !screenShareAssigned && participant.publishSources().contains("screen_share"));
       if (grant == null || admitted >= setting.getMaxParticipants()) {
         liveKitGateway.removeParticipant(session.getProviderRoomName(), participant.identity());
@@ -313,17 +378,36 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
         updateAccessIfChanged(participant, grant);
       }
     }
+    return participants;
   }
 
   private LiveKitJoinGrant currentGrant(MeetingSession session, Room room, MeetingRoomSetting setting,
-      Long userId, boolean screenShareAcquired) {
+      LiveKitParticipantSnapshot participant, boolean screenShareAcquired) {
+    Long userId = userIdFromIdentity(participant.identity());
+    if (userId == null) return null;
     try {
-      ClassEnrollment member = authorizationService.requireActiveMember(room.getPublicId(), userId);
+      MeetingRole role = authorizationService.requireRoomAccess(room.getPublicId(), userId);
       moderationService.requireNotBanned(session.getPublicId(), userId);
       User user = userService.getUserById(userId);
       userService.validateUserStatus(user);
-      return createGrant(session, room, setting, member, user, screenShareAcquired);
+      return createGrant(session, room, setting, role, user, screenShareAcquired,
+          eventSpeakingSid(session, participant));
     } catch (BusinessException exception) {
+      return null;
+    }
+  }
+
+  private String eventSpeakingSid(MeetingSession session, LiveKitParticipantSnapshot participant) {
+    if (session.getRoom().getRoomType() != RoomType.EVENT || participant.metadata() == null) {
+      return null;
+    }
+    try {
+      var metadata = objectMapper.readTree(participant.metadata());
+      return metadata != null
+          && session.getPublicId().equals(metadata.path("runtimeSessionId").asText())
+          && participant.sid().equals(metadata.path(EVENT_SPEAKING_SID).asText())
+          ? participant.sid() : null;
+    } catch (JsonProcessingException exception) {
       return null;
     }
   }
@@ -414,15 +498,20 @@ public class MeetingJoinServiceImpl implements MeetingJoinService {
   private String createParticipantMetadata(
       MeetingSession runtimeSession,
       Room room,
-      ClassEnrollment member,
-      MeetingRoomSetting setting
+      MeetingRole role,
+      Long userId,
+      MeetingRoomSetting setting,
+      String eventSpeakingSid
   ) {
     Map<String, Object> metadata = new LinkedHashMap<>();
-    metadata.put("userId", member.getUserId());
+    metadata.put("userId", userId);
     metadata.put("runtimeSessionId", runtimeSession.getPublicId());
     metadata.put("roomId", room.getPublicId());
-    metadata.put("meetingRole", member.getRole().name());
-    metadata.put("canShareScreen", screenShareAllowed(member.getRole(), setting));
+    metadata.put("meetingRole", role.name());
+    metadata.put("canShareScreen", screenShareAllowed(role, setting));
+    if (eventSpeakingSid != null) {
+      metadata.put(EVENT_SPEAKING_SID, eventSpeakingSid);
+    }
 
     try {
       return objectMapper.writeValueAsString(metadata);

@@ -124,7 +124,7 @@ public class AiRealtimeSessionServiceImpl implements AiRealtimeSessionService {
   @Transactional(noRollbackFor = BusinessException.class)
   public AiRealtimeSessionResponse status(String runtimeSessionId, Long currentUserId) {
     MeetingSession runtime = findRuntime(runtimeSessionId);
-    authorizationService.requireActiveMember(runtime.getMeetingRoomId(), currentUserId);
+    authorizationService.requireRoomAccess(runtime.getMeetingRoomId(), currentUserId);
     AiRealtimeSession session = findAiSession(runtimeSessionId);
     if (session.getStatus()
         == org.ptit.meeting.modules.ai.constant.enums.AiRealtimeStatus.ACTIVE) {

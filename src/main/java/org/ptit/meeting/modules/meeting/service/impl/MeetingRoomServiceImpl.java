@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.auth.entity.User;
+import org.ptit.meeting.modules.auth.constant.enums.RoleCode;
 import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
@@ -60,6 +61,11 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
         if (roomType == null) {
             throw BusinessException.invalidInput(MeetingErrorConstants.ROOM_TYPE_INVALID);
         }
+        if (roomType == RoomType.EVENT
+                && !creator.getRoles().contains(RoleCode.ROLE_STAFF.name())
+                && !creator.getRoles().contains(RoleCode.ROLE_ADMIN.name())) {
+            throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
+        }
 
         Room room = roomRepository.save(new Room(
                 generateRoomCode(),
@@ -82,7 +88,7 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
     @Transactional
     public MeetingRoomResponse getById(String roomId, Long currentUserId) {
         Room room = findRoom(roomId);
-        authorizationService.requireActiveMember(room.getPublicId(), currentUserId);
+        authorizationService.requireRoomAccess(room.getPublicId(), currentUserId);
         return roomMapper.toResponse(room, findSetting(room.getPublicId()));
     }
 
@@ -109,8 +115,21 @@ public class MeetingRoomServiceImpl implements MeetingRoomService {
 
         List<Room> rooms = accessibleRooms.values().stream()
                 .sorted(Comparator.comparing(Room::getCreatedAt).reversed()).toList();
+        return toResponses(rooms);
+    }
+
+    @Override
+    @Transactional
+    public List<MeetingRoomResponse> getEvents(Long currentUserId) {
+        requireActiveUser(currentUserId);
+        return toResponses(roomRepository.findAllByRoomTypeAndStatusOrderByCreatedAtDesc(
+                RoomType.EVENT, RoomStatus.ACTIVE));
+    }
+
+    private List<MeetingRoomResponse> toResponses(List<Room> rooms) {
+        if (rooms.isEmpty()) return List.of();
         Map<String, MeetingRoomSetting> settings = settingRepository
-                .findAllByRoomIdIn(List.copyOf(accessibleRooms.keySet()))
+                .findAllByRoomIdIn(rooms.stream().map(Room::getPublicId).toList())
                 .stream()
                 .collect(Collectors.toMap(MeetingRoomSetting::getRoomId, Function.identity()));
         settings.values().forEach(this::normalizeSetting);

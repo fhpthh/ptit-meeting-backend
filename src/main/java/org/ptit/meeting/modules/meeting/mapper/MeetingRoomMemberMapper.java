@@ -1,6 +1,7 @@
 package org.ptit.meeting.modules.meeting.mapper;
 
 import java.time.ZoneId;
+import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.meeting.constant.enums.MemberStatus;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRoomMemberResponse;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class MeetingRoomMemberMapper {
 
-  public MeetingRoomMemberResponse toResponse(ClassEnrollment member, String roomId) {
+  public MeetingRoomMemberResponse toResponse(ClassEnrollment member, String roomId, User user) {
     return new MeetingRoomMemberResponse(
         member.getId() == null ? null : member.getId().toString(),
         roomId,
@@ -18,7 +19,9 @@ public class MeetingRoomMemberMapper {
         member.getRole(),
         member.getStatus() == EnrollmentStatus.ENROLLED ? MemberStatus.ACTIVE : MemberStatus.INACTIVE,
         member.getEnrolledAt().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
-        member.getUpdatedAt().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant()
+        member.getUpdatedAt().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+        user == null ? null : user.getFullName(),
+        user == null ? null : user.getCode()
     );
   }
 }

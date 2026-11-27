@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomType;
 import org.ptit.meeting.modules.meeting.entity.Room;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,6 +18,8 @@ public interface MeetingRoomRepository extends JpaRepository<Room, Long> {
     Optional<Room> findByPublicId(String publicId);
 
     Optional<Room> findByClassSectionId(Long classSectionId);
+
+    List<Room> findAllByRoomTypeAndStatusOrderByCreatedAtDesc(RoomType roomType, RoomStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT room FROM Room room WHERE room.publicId = :roomId")

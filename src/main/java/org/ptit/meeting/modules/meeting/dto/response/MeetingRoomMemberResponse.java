@@ -12,6 +12,8 @@ public record MeetingRoomMemberResponse(
     MeetingRole role,
     MemberStatus status,
     Instant createdAt,
-    Instant updatedAt
+    Instant updatedAt,
+    String fullName,
+    String userCode
 ) {
 }

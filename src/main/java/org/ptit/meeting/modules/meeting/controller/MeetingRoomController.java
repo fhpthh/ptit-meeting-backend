@@ -35,6 +35,13 @@ public class MeetingRoomController {
     return BaseResponse.success(roomService.getMyRooms(currentUserId));
   }
 
+  @GetMapping("/events")
+  public BaseResponse<List<MeetingRoomResponse>> getEvents(
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    return BaseResponse.success(roomService.getEvents(currentUserId));
+  }
+
   @GetMapping("/{roomId}")
   public BaseResponse<MeetingRoomResponse> getById(
       @PathVariable String roomId,
