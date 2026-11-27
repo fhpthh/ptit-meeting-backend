@@ -27,6 +27,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
   private final TokenService tokenService;
 
   @Override
+  protected boolean shouldNotFilter(HttpServletRequest request) {
+    String path = request.getRequestURI().substring(request.getContextPath().length());
+    return path.startsWith("/internal/v1/recording-jobs/")
+        || path.startsWith("/internal/v1/recording-credentials/");
+  }
+
+  @Override
   protected void doFilterInternal(
       HttpServletRequest request,
       HttpServletResponse response,

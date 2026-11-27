@@ -1,0 +1,26 @@
+-- Additive immutable AI originals. No approval/publication pointer is created here.
+CREATE TABLE IF NOT EXISTS recording_translation_drafts (
+  id VARCHAR(36) NOT NULL,
+  job_id VARCHAR(36) NOT NULL,
+  recording_id VARCHAR(36) NOT NULL,
+  run_id VARCHAR(36) NOT NULL,
+  recording_epoch BIGINT NOT NULL,
+  attempt_id VARCHAR(36) NOT NULL,
+  fencing_token BIGINT NOT NULL,
+  manifest_bucket VARCHAR(63) NOT NULL,
+  manifest_key VARCHAR(1024) NOT NULL,
+  manifest_sha256 VARCHAR(64) NOT NULL,
+  manifest_bytes BIGINT NOT NULL,
+  manifest_json LONGTEXT NOT NULL,
+  original_document_json LONGTEXT NOT NULL,
+  source_sha256 VARCHAR(64) NOT NULL,
+  document_revision BIGINT NOT NULL,
+  duration_ms BIGINT NOT NULL,
+  vi_segments INT NOT NULL,
+  en_segments INT NOT NULL,
+  created_at TIMESTAMP(6) NOT NULL,
+  updated_at TIMESTAMP(6) NOT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT uk_recording_draft_job UNIQUE (job_id),
+  CONSTRAINT fk_recording_draft_job FOREIGN KEY (job_id) REFERENCES recording_translation_jobs(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

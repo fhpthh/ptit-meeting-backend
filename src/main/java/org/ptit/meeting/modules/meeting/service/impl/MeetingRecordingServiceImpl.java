@@ -21,6 +21,7 @@ import org.ptit.meeting.integration.storage.MeetingRecordingStorage.UploadPartGr
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRecordingStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
+import org.ptit.meeting.modules.meeting.dto.internal.RecordingTranslationSource;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRecordingCompleteRequest;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingRecordingCreateRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingRecordingResponse;
@@ -273,6 +274,34 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
         .toList();
     for (String recordingId : recordingIds) {
       cleanupStaleUpload(recordingId, cutoff);
+    }
+  }
+
+  @Override
+  @Transactional
+  public RecordingTranslationSource requireTranslationSource(String recordingId, Long currentUserId) {
+    // Serializes job creation per recording without allowing another module to
+    // access the recording repository. Does not require a LIVE session.
+    MeetingRecording recording = findRecordingForUpdate(recordingId);
+    requireViewAccess(recording.getRuntimeSessionId(), recording.getMeetingRoomId(), currentUserId);
+    authorizationService.requireRuntimeSessionHost(recording.getMeetingRoomId(), currentUserId);
+    if (recording.getStatus() != MeetingRecordingStatus.COMPLETED
+        || recording.getSizeBytes() == null || recording.getSizeBytes() <= 0) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.RECORDING_NOT_READY);
+    }
+    return new RecordingTranslationSource(recording.getId(), recording.getRuntimeSessionId(),
+        recording.getMeetingRoomId(), recordingProperties.getStorage().getBucket(),
+        recording.getObjectKey(), recording.getSizeBytes(),
+        findRuntimeSession(recording.getRuntimeSessionId()).getRoom().getClassSectionId());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public void requireSubtitleViewAccess(String recordingId, Long currentUserId) {
+    MeetingRecording recording = findRecording(recordingId);
+    requireViewAccess(recording.getRuntimeSessionId(), recording.getMeetingRoomId(), currentUserId);
+    if (recording.getStatus() != MeetingRecordingStatus.COMPLETED) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.RECORDING_NOT_READY);
     }
   }
 

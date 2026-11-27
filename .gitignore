@@ -32,4 +32,9 @@ build/
 ### VS Code ###
 .vscode/
 uploads/
+
+# Local credentials must never enter a production commit.
 .env
+.env.*
+!.env.example
+
