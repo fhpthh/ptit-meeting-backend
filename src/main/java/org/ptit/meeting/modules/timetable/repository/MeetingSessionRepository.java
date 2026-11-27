@@ -1,8 +1,10 @@
 package org.ptit.meeting.modules.timetable.repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.ptit.meeting.modules.timetable.dto.internal.UpcomingOnlineSessionDto;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
@@ -349,4 +351,43 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       WHERE section.semesterId = :semesterId
       """)
   long countBySemesterId(@Param("semesterId") Long semesterId);
+
+  @Query("""
+      SELECT new org.ptit.meeting.modules.timetable.dto.internal.UpcomingOnlineSessionDto(
+          session.id,
+          session.publicId,
+          session.scheduleId,
+          section.id,
+          section.classCode,
+          section.groupNumber,
+          subject.code,
+          subject.name,
+          section.lecturerId,
+          section.lecturerName,
+          room.name,
+          room.publicId,
+          session.studyDate,
+          session.scheduledStart,
+          session.scheduledEnd
+      )
+      FROM MeetingSession session
+      JOIN ClassSchedule schedule ON schedule.id = session.scheduleId
+      JOIN ClassSection section ON section.id = schedule.classSectionId
+      JOIN Subject subject ON subject.id = section.subjectId
+      JOIN Room room ON room.id = session.roomId
+      WHERE schedule.isOnline = true
+        AND session.status = :sessionStatus
+        AND section.status = :sectionStatus
+        AND room.status = :roomStatus
+        AND session.scheduledStart > :windowStart
+        AND session.scheduledStart <= :windowEnd
+      ORDER BY session.scheduledStart ASC, session.id ASC
+      """)
+  List<UpcomingOnlineSessionDto> findUpcomingOnlineSessions(
+      @Param("windowStart") LocalDateTime windowStart,
+      @Param("windowEnd") LocalDateTime windowEnd,
+      @Param("sessionStatus") SessionStatus sessionStatus,
+      @Param("sectionStatus") ClassSectionStatus sectionStatus,
+      @Param("roomStatus") RoomStatus roomStatus
+  );
 }
