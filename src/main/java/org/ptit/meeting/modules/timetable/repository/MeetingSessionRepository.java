@@ -295,4 +295,58 @@ public interface MeetingSessionRepository extends JpaRepository<MeetingSession, 
       @Param("semesterId") Long semesterId,
       @Param("sectionStatus") ClassSectionStatus sectionStatus
   );
+
+  @Query("""
+    SELECT new org.ptit.meeting.modules.timetable.dto.internal.LecturerOnlineScheduleRow(
+        session.id,
+        session.scheduleId,
+        session.roomId,
+
+        session.studyDate,
+        session.scheduledStart,
+        session.scheduledEnd,
+        session.status,
+
+        schedule.startPeriod,
+        schedule.numPeriods,
+
+        section.id,
+        section.classCode,
+        section.groupNumber,
+        section.practiceGroup,
+        section.managementClass,
+
+        section.lecturerId,
+        section.lecturerName,
+
+        subject.code,
+        subject.name,
+
+        room.name,
+        session.publicId,
+        room.publicId
+    )
+    FROM MeetingSession session
+    JOIN ClassSchedule schedule
+      ON schedule.id = session.scheduleId
+    JOIN ClassSection section
+      ON section.id = schedule.classSectionId
+    JOIN Subject subject
+      ON subject.id = section.subjectId
+    JOIN Room room
+      ON room.id = session.roomId
+    WHERE session.studyDate = :studyDate
+      AND schedule.isOnline = true
+    ORDER BY session.scheduledStart ASC
+    """)
+  List<LecturerOnlineScheduleRow> findTodayOnlineSessions(@Param("studyDate") LocalDate studyDate);
+
+  @Query("""
+      SELECT COUNT(session.id)
+      FROM MeetingSession session
+      JOIN ClassSchedule schedule ON schedule.id = session.scheduleId
+      JOIN ClassSection section ON section.id = schedule.classSectionId
+      WHERE section.semesterId = :semesterId
+      """)
+  long countBySemesterId(@Param("semesterId") Long semesterId);
 }

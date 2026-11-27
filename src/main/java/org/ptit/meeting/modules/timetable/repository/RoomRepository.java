@@ -2,6 +2,7 @@ package org.ptit.meeting.modules.timetable.repository;
 
 import java.util.List;
 import java.util.Optional;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
 import org.ptit.meeting.modules.meeting.entity.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -17,5 +18,7 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
   boolean existsByClassSectionId(Long classSectionId);
 
   List<Room> findAllByClassSectionIdIn(List<Long> classSectionIds);
+
+  long countByStatus(RoomStatus status);
 
 }

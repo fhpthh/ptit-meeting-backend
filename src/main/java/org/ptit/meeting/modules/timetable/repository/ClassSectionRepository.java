@@ -53,6 +53,17 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Long
 
   Optional<ClassSection> findByClassCodeAndSemesterId(String classCode, Long semesterId);
 
+  long countBySemesterId(Long semesterId);
+
+  @Query("""
+      SELECT COALESCE(subject.department, 'Khác'), COUNT(section.id)
+      FROM ClassSection section
+      JOIN Subject subject ON section.subjectId = subject.id
+      WHERE section.semesterId = :semesterId
+      GROUP BY subject.department
+      """)
+  List<Object[]> countClassSectionsByDepartment(@Param("semesterId") Long semesterId);
+
   List<ClassSection> findAllBySemesterId(Long semesterId);
 
   List<ClassSection> findAllBySemesterIdAndLecturerId(Long semesterId, Long lecturerId);
