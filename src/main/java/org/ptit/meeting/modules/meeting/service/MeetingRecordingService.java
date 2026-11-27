@@ -38,5 +38,7 @@ public interface MeetingRecordingService {
 
   RecordingTranslationSource requireTranslationSource(String recordingId, Long currentUserId);
 
+  void requireSubtitleViewAccess(String recordingId, Long currentUserId);
+
   void cleanupStaleUploads();
 }

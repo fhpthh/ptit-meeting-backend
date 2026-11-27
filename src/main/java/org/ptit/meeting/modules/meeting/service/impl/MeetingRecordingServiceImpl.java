@@ -295,6 +295,16 @@ public class MeetingRecordingServiceImpl implements MeetingRecordingService {
         findRuntimeSession(recording.getRuntimeSessionId()).getRoom().getClassSectionId());
   }
 
+  @Override
+  @Transactional(readOnly = true)
+  public void requireSubtitleViewAccess(String recordingId, Long currentUserId) {
+    MeetingRecording recording = findRecording(recordingId);
+    requireViewAccess(recording.getRuntimeSessionId(), recording.getMeetingRoomId(), currentUserId);
+    if (recording.getStatus() != MeetingRecordingStatus.COMPLETED) {
+      throw BusinessException.invalidInput(MeetingErrorConstants.RECORDING_NOT_READY);
+    }
+  }
+
   private PreparedStart prepareStart(String runtimeSessionId, Long currentUserId) {
     requireStorageConfiguration();
     MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);

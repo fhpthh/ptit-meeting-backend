@@ -6,5 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RecordingTranslationDraftRepository
     extends JpaRepository<RecordingTranslationDraft, String> {
+  Optional<RecordingTranslationDraft> findFirstByRecordingIdOrderByCreatedAtDescIdDesc(String recordingId);
+
   Optional<RecordingTranslationDraft> findByJobId(String jobId);
 }
