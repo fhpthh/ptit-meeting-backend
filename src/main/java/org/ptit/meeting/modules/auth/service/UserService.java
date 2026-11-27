@@ -16,6 +16,12 @@ public interface UserService {
 
   List<User> getUsersByIds(Collection<Long> userIds);
 
+  List<Long> findActiveUserIdsByAccountTypes(Collection<AccountType> accountTypes);
+
+  List<Long> findActiveUserIdsByIds(Collection<Long> userIds);
+
+  List<Long> findActiveUserIdsByDepartment(String department);
+
   List<User> searchLecturers(String keyword);
 
   Optional<User> findLecturer(String identifier);
