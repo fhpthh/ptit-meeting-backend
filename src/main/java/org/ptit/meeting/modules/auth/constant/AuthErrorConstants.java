@@ -21,6 +21,12 @@ public final class AuthErrorConstants {
   public static final String STUDENT_EXPORT_LIMIT = "error.student-admin.export-limit";
   public static final String STUDENT_EXPORT_FAILED = "error.student-admin.export-failed";
   public static final String STUDENT_PASSWORD_SIZE = "validation.student-admin.password.size";
+  public static final String LECTURER_IMPORT_EMPTY_FILE = "error.lecturer.import.empty-file";
+  public static final String LECTURER_IMPORT_INVALID_FORMAT = "error.lecturer.import.invalid-format";
+  public static final String LECTURER_ROLE_MISSING = "error.lecturer.role-missing";
+  public static final String LECTURER_NOT_FOUND = "error.lecturer.not-found";
+  public static final String LECTURER_EMAIL_EXISTS = "error.lecturer.email-exists";
+  public static final String LECTURER_CODE_EXISTS = "error.lecturer.code-exists";
 
   private AuthErrorConstants() {
   }

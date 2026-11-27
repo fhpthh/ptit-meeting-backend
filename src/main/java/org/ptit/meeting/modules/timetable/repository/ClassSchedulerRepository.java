@@ -23,6 +23,8 @@ public interface ClassSchedulerRepository extends JpaRepository<ClassSchedule, L
 
   List<ClassSchedule> findAllByClassSectionIdAndIsOnlineTrue(Long classSectionId);
 
+  boolean existsByClassSectionIdAndIsOnlineTrue(Long classSectionId);
+
   Optional<ClassSchedule> findByClassSectionIdAndDayOfWeekAndStartPeriod(
       Long classSectionId, Integer dayOfWeek, Integer startPeriod
   );

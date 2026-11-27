@@ -49,6 +49,8 @@ import org.ptit.meeting.modules.auth.entity.User;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.meeting.service.MeetingRoomService;
+import org.ptit.meeting.modules.timetable.event.LecturerAssignedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -74,6 +76,7 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
   private final RoomRepository roomRepository;
   private final UserService userService;
   private final MeetingRoomService meetingRoomService;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Override
   @Transactional(readOnly = true)
@@ -105,7 +108,16 @@ public class SemesterSubjectAdminServiceImpl implements SemesterSubjectAdminServ
     section.setLecturerName(lecturer.getFullName());
     classSectionRepository.saveAndFlush(section);
     meetingRoomService.refreshClassAccess(sectionId);
-    return toClassSectionDetail(section, getSemester(section.getSemesterId()), getSubject(section.getSubjectId()));
+    Subject subject = getSubject(section.getSubjectId());
+    if (eventPublisher != null && classSchedulerRepository.existsByClassSectionIdAndIsOnlineTrue(sectionId)) {
+      eventPublisher.publishEvent(new LecturerAssignedEvent(
+          section.getId(),
+          section.getClassCode(),
+          subject.getName(),
+          lecturer.getId()
+      ));
+    }
+    return toClassSectionDetail(section, getSemester(section.getSemesterId()), subject);
   }
 
   @Override

@@ -6,15 +6,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.integration.livekit.LiveKitGateway;
 import org.ptit.meeting.modules.ai.service.AiRealtimeSessionService;
-import org.ptit.meeting.integration.livekit.dto.LiveKitParticipantSnapshot;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.constant.enums.RoomStatus;
@@ -30,7 +27,6 @@ import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionReposito
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
 import org.ptit.meeting.modules.meeting.service.MeetingChatService;
 import org.ptit.meeting.modules.meeting.service.MeetingHandRaiseService;
-import org.ptit.meeting.modules.meeting.service.MeetingHostPresenceService;
 import org.ptit.meeting.modules.meeting.service.MeetingRuntimeSessionService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -46,7 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionService {
 
   private static final int TITLE_MAX_LENGTH = 150;
-  private static final Duration STUDENT_OVERTIME_LIMIT = Duration.ofHours(1);
+  private static final Duration OVERTIME_LIMIT = Duration.ofMinutes(30);
 
   private final MeetingRuntimeSessionRepository runtimeSessionRepository;
   private final MeetingRoomRepository roomRepository;
@@ -56,7 +52,6 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   private final LiveKitGateway liveKitGateway;
   private final MeetingChatService chatService;
   private final MeetingHandRaiseService handRaiseService;
-  private final MeetingHostPresenceService hostPresenceService;
   private final PlatformTransactionManager transactionManager;
   private final AiRealtimeSessionService aiRealtimeSessionService;
 
@@ -193,11 +188,8 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   public void reconcileOvertime(
       String runtimeSessionId,
       Long observedVersion,
-      String observedHostState,
-      List<LiveKitParticipantSnapshot> participants
+      boolean hasParticipants
   ) {
-    Set<String> identities = participants.stream()
-        .map(LiveKitParticipantSnapshot::identity).collect(Collectors.toSet());
     // LiveKit was queried before this transaction; do not hold a row lock during that call.
     newTransaction().executeWithoutResult(status -> {
       MeetingSession session = findRuntimeSessionForUpdate(runtimeSessionId);
@@ -207,17 +199,8 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
           || !Objects.equals(session.getVersion(), observedVersion)) {
         return;
       }
-      boolean hostPresent = authorizationService.getRuntimeSessionHostIds(session.getMeetingRoomId())
-          .stream().anyMatch(userId -> identities.contains("user-" + userId));
-      if (hostPresent) {
-        hostPresenceService.markPresent(runtimeSessionId);
-        return;
-      }
-      boolean gracePassed = hostPresenceService.hasReconnectGracePassed(
-          runtimeSessionId, observedHostState, now
-      );
-      boolean overtimePassed = !now.isBefore(session.getScheduledEndAt().plus(STUDENT_OVERTIME_LIMIT));
-      if (gracePassed && (participants.isEmpty() || overtimePassed)) {
+      boolean overtimePassed = !now.isBefore(session.getScheduledEndAt().plus(OVERTIME_LIMIT));
+      if (!hasParticipants || overtimePassed) {
         finish(session, now);
       }
     });
@@ -238,7 +221,6 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
       aiRealtimeSessionService.stopAfterMeetingEnded(runtimeSessionId);
       chatService.clearHistory(runtimeSessionId);
       handRaiseService.clear(runtimeSessionId);
-      hostPresenceService.clear(runtimeSessionId);
       session.setCleanupPending(false);
       runtimeSessionRepository.saveAndFlush(session);
     });

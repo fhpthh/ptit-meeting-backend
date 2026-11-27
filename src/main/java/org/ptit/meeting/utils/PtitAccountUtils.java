@@ -9,10 +9,12 @@ import java.util.regex.Pattern;
 public final class PtitAccountUtils {
 
   // Mật khẩu mặc định khi phòng giáo vụ khởi tạo tài khoản hàng loạt
-  public static final String DEFAULT_STUDENT_PASSWORD = "Ptit@123";
+  public static final String DEFAULT_PASSWORD = "Ptit@123";
 
   // Domain email sinh viên Microsoft 365 chính thức của PTIT
   public static final String STUDENT_EMAIL_DOMAIN = "@stu.ptit.edu.vn";
+  // Domain email giảng viên/cán bộ chính thức của PTIT
+  public static final String STAFF_EMAIL_DOMAIN = "@ptit.edu.vn";
 
   // Regex nhận diện mã sinh viên PTIT hệ chính quy dạng rút gọn trong email (VD: B22CN356, B21AT123, B22CQCN01)
   private static final Pattern SHORT_STUDENT_CODE_PATTERN = Pattern.compile(
@@ -71,7 +73,8 @@ public final class PtitAccountUtils {
   }
 
   /**
-   * Kiểm tra xem một chuỗi có phải là mã sinh viên dạng rút gọn hay không (thiếu "DC", VD: B22CN356).
+   * Kiểm tra xem một chuỗi có phải là mã sinh viên dạng rút gọn hay không (thiếu "DC", VD:
+   * B22CN356).
    */
   public static boolean isShortStudentCode(String code) {
     if (code == null || code.isBlank()) {
@@ -109,4 +112,55 @@ public final class PtitAccountUtils {
     }
     return clean;
   }
+
+  public static String generateStaffEmail(String fullName) {
+    if (fullName == null || fullName.isBlank()) {
+      return null;
+    }
+
+    String[] parts = fullName.trim().split("\\s+");
+    String lastName = removeAccents(parts[parts.length - 1]).toLowerCase();
+
+    StringBuilder initials = new StringBuilder();
+    for (int i = 0; i < parts.length - 1; i++) {
+      String p = removeAccents(parts[i]);
+      if (!p.isEmpty()) {
+        initials.append(Character.toLowerCase(p.charAt(0)));
+      }
+    }
+    return lastName + initials + STAFF_EMAIL_DOMAIN;
+  }
+
+  /**
+   * Nhận diện Đơn vị / Khoa từ tiền tố mã giảng viên PTIT.
+   */
+  public static String resolveLecturerDepartment(String lecturerCode) {
+    if (lecturerCode == null || lecturerCode.isBlank()) {
+      return null;
+    }
+    String cleanCode = lecturerCode.trim().toUpperCase();
+    if (cleanCode.startsWith("KCN")) {
+      return "Khoa Công nghệ Thông tin 1";
+    }
+    if (cleanCode.startsWith("KTN")) {
+      return "Khoa Trí tuệ Nhân tạo";
+    }
+    if (cleanCode.startsWith("KCB")) {
+      return "Khoa Cơ bản 1";
+    }
+    if (cleanCode.startsWith("KDT")) {
+      return "Khoa Điện tử 1";
+    }
+    if (cleanCode.startsWith("KAT")) {
+      return "Khoa An toàn Thông tin";
+    }
+    if (cleanCode.startsWith("KVT")) {
+      return "Khoa Viễn thông 1";
+    }
+    if (cleanCode.startsWith("KPT")) {
+      return "Khoa Đa phương tiện";
+    }
+    return null;
+  }
+
 }

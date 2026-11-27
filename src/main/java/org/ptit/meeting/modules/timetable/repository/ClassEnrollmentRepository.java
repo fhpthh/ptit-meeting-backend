@@ -1,7 +1,10 @@
 package org.ptit.meeting.modules.timetable.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.ptit.meeting.modules.auth.constant.enums.AccountType;
+import org.ptit.meeting.modules.auth.constant.enums.UserStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
 import org.ptit.meeting.modules.timetable.dto.internal.ClassSectionStudentRow;
 import org.ptit.meeting.modules.timetable.dto.response.StudentClassEnrollmentResponse;
@@ -30,13 +33,6 @@ public interface ClassEnrollmentRepository
   Optional<ClassEnrollment> findByClassSectionIdAndUserId(Long classSectionId, Long userId);
 
   Optional<ClassEnrollment> findByRoomIdAndUserId(String roomId, Long userId);
-
-  @Query("SELECT enrollment.userId FROM ClassEnrollment enrollment "
-      + "WHERE enrollment.roomId = :roomId "
-      + "AND enrollment.status = org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus.ENROLLED "
-      + "AND enrollment.role IN (org.ptit.meeting.modules.meeting.constant.enums.MeetingRole.OWNER, "
-      + "org.ptit.meeting.modules.meeting.constant.enums.MeetingRole.HOST)")
-  List<Long> findActiveHostUserIds(@Param("roomId") String roomId);
 
   List<ClassEnrollment> findAllByClassSectionIdAndStatusOrderByEnrolledAtAsc(
       Long classSectionId, EnrollmentStatus status);
@@ -104,6 +100,23 @@ public interface ClassEnrollmentRepository
       @Param("sortBy") String sortBy,
       @Param("direction") String direction,
       Pageable pageable
+  );
+
+  @Query("""
+      SELECT DISTINCT enrollment.userId
+      FROM ClassEnrollment enrollment
+      JOIN User student ON student.id = enrollment.userId
+      WHERE enrollment.classSectionId IN :classSectionIds
+        AND enrollment.status = :enrollmentStatus
+        AND student.accountType = :studentAccountType
+        AND student.status = :userStatus
+      ORDER BY enrollment.userId ASC
+      """)
+  List<Long> findActiveEnrolledStudentUserIdsByClassSectionIds(
+      @Param("classSectionIds") Collection<Long> classSectionIds,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("studentAccountType") AccountType studentAccountType,
+      @Param("userStatus") UserStatus userStatus
   );
 
 }

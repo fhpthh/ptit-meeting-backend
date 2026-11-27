@@ -68,4 +68,7 @@ public interface SubjectRepository extends JpaRepository<Subject, Long> {
       """)
   java.util.List<String> findDepartmentsBySemesterId(@Param("semesterId") Long semesterId);
 
+  @Query("SELECT COUNT(DISTINCT section.subjectId) FROM ClassSection section WHERE section.semesterId = :semesterId")
+  long countDistinctSubjectsBySemesterId(@Param("semesterId") Long semesterId);
+
 }

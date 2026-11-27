@@ -101,6 +101,33 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByAccountTypes(Collection<AccountType> accountTypes) {
+    if (accountTypes == null || accountTypes.isEmpty()) {
+      return List.of();
+    }
+    return userRepository.findIdsByAccountTypeInAndStatus(accountTypes, UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByIds(Collection<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return List.of();
+    }
+    return userRepository.findIdsByIdInAndStatus(userIds, UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByDepartment(String department) {
+    if (department == null || department.isBlank()) {
+      return List.of();
+    }
+    return userRepository.findIdsByDepartmentIgnoreCaseAndStatus(department.trim(), UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<User> searchLecturers(String keyword) {
     String normalized = keyword == null || keyword.isBlank() ? null : keyword.trim();
     return userRepository.searchActiveLecturers(AccountType.LECTURER, UserStatus.ACTIVE,
@@ -182,7 +209,7 @@ public class UserServiceImpl implements UserService {
           }
           // Khởi tạo mật khẩu mặc định nếu tài khoản sinh viên trước đó chưa có mật khẩu
           if (existingUser.getAccountType() == AccountType.STUDENT && existingUser.getPasswordHash() == null) {
-            existingUser.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+            existingUser.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
             existingUser.setMustChangePassword(true);
             modified = true;
           }
@@ -196,7 +223,7 @@ public class UserServiceImpl implements UserService {
         .orElseGet(() -> {
           log.info("(findOrCreateByEmail) JIT provisioning new user: {}", email);
           String defaultPasswordHash = (accountType == AccountType.STUDENT)
-              ? passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD)
+              ? passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD)
               : null;
           boolean mustChangePassword = (accountType == AccountType.STUDENT);
 
@@ -289,7 +316,7 @@ public class UserServiceImpl implements UserService {
       }
       // Đảm bảo sinh viên luôn có mật khẩu mặc định Ptit@123 nếu trước đó chưa có mật khẩu
       if (existing.getPasswordHash() == null) {
-        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD));
+        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
         existing.setMustChangePassword(true);
         modified = true;
       }
@@ -306,7 +333,7 @@ public class UserServiceImpl implements UserService {
         .fullName(fullName != null && !fullName.isBlank() ? fullName.trim() : normalizedCode)
         .email(targetEmail)
         .department(department != null ? department.trim() : null)
-        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_STUDENT_PASSWORD))
+        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD))
         .accountType(AccountType.STUDENT)
         .status(UserStatus.ACTIVE)
         .mustChangePassword(true) // Yêu cầu đổi mật khẩu ở lần đăng nhập thường đầu tiên
@@ -320,6 +347,86 @@ public class UserServiceImpl implements UserService {
           .roleId(role.getId())
           .build());
     });
+    enrichAuthorities(saved);
+    return saved;
+  }
+
+  @Override
+  @Transactional
+  public User findOrCreateLecturer(String code, String fullName, String email, String department) {
+    String cleanCode = code != null ? code.trim() : null;
+    String cleanEmail = email != null ? email.trim().toLowerCase() : null;
+    String cleanFullName = fullName != null ? fullName.trim() : null;
+
+    if (cleanCode == null && cleanEmail == null) {
+      throw BusinessException.invalidInput("validation.lecturer.code.required");
+    }
+
+    // 1. Tìm kiếm giảng viên đã tồn tại theo mã GV hoặc email
+    Optional<User> existingOpt = Optional.empty();
+    if (cleanCode != null) {
+      existingOpt = userRepository.findByCode(cleanCode);
+    }
+    if (existingOpt.isEmpty() && cleanEmail != null) {
+      existingOpt = userRepository.findByEmail(cleanEmail);
+    }
+
+    // 2. Nếu đã tồn tại, đồng bộ bổ sung thông tin
+    if (existingOpt.isPresent()) {
+      User existing = existingOpt.get();
+      boolean modified = false;
+
+      if (cleanCode != null && (existing.getCode() == null || !cleanCode.equalsIgnoreCase(existing.getCode()))) {
+        existing.setCode(cleanCode);
+        modified = true;
+      }
+      if (cleanFullName != null && !cleanFullName.equals(existing.getFullName())) {
+        existing.setFullName(cleanFullName);
+        modified = true;
+      }
+      if (cleanEmail != null && !cleanEmail.equalsIgnoreCase(existing.getEmail())) {
+        existing.setEmail(cleanEmail);
+        modified = true;
+      }
+      if (department != null && !department.trim().equalsIgnoreCase(existing.getDepartment())) {
+        existing.setDepartment(department.trim());
+        modified = true;
+      }
+      // Đảm bảo có mật khẩu khởi tạo nếu trước đó chưa có
+      if (existing.getPasswordHash() == null) {
+        existing.setPasswordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD));
+        existing.setMustChangePassword(true);
+        modified = true;
+      }
+      if (modified) {
+        existing = userRepository.save(existing);
+      }
+      enrichAuthorities(existing);
+      return existing;
+    }
+
+    // 3. Khởi tạo tài khoản Giảng viên mới
+    User newLecturer = User.builder()
+        .code(cleanCode)
+        .fullName(cleanFullName != null ? cleanFullName : cleanCode)
+        .email(cleanEmail)
+        .department(department)
+        .passwordHash(passwordEncoder.encode(PtitAccountUtils.DEFAULT_PASSWORD))
+        .accountType(AccountType.LECTURER)
+        .status(UserStatus.ACTIVE)
+        .mustChangePassword(true) // Bắt buộc đổi MK ở lần đăng nhập tay đầu tiên
+        .build();
+
+    User saved = userRepository.save(newLecturer);
+
+    // Gán vai trò ROLE_LECTURER
+    roleRepository.findByCode(RoleCode.ROLE_LECTURER.name()).ifPresent(role -> {
+      userRoleRepository.save(UserRole.builder()
+          .userId(saved.getId())
+          .roleId(role.getId())
+          .build());
+    });
+
     enrichAuthorities(saved);
     return saved;
   }
