@@ -87,7 +87,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Transactional(readOnly = true)
   public List<MeetingRuntimeSessionResponse> getByRoom(String roomId, Long currentUserId) {
     Room room = findRoom(roomId);
-    authorizationService.requireActiveMember(room.getPublicId(), currentUserId);
+    authorizationService.requireRoomAccess(room.getPublicId(), currentUserId);
     return runtimeSessionRepository.findAllByRoom_PublicIdOrderByScheduledStartAsc(room.getPublicId())
         .stream()
         .map(runtimeSessionMapper::toResponse)
@@ -98,7 +98,7 @@ public class MeetingRuntimeSessionServiceImpl implements MeetingRuntimeSessionSe
   @Transactional(readOnly = true)
   public MeetingRuntimeSessionResponse getById(String runtimeSessionId, Long currentUserId) {
     MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    authorizationService.requireActiveMember(runtimeSession.getMeetingRoomId(), currentUserId);
+    authorizationService.requireRoomAccess(runtimeSession.getMeetingRoomId(), currentUserId);
     return runtimeSessionMapper.toResponse(runtimeSession);
   }
 

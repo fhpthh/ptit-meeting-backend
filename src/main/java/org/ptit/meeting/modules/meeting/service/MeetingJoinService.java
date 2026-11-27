@@ -10,6 +10,9 @@ public interface MeetingJoinService {
 
   void releaseScreenShare(String runtimeSessionId, String participantSid, Long currentUserId);
 
+  void setEventSpeakingPermission(String runtimeSessionId, Long participantUserId,
+      String participantSid, boolean enabled, Long currentUserId);
+
   boolean admitParticipant(String runtimeSessionId, Long userId);
 
   void synchronizeRoom(String roomId);

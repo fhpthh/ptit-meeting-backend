@@ -2,7 +2,10 @@ package org.ptit.meeting.modules.meeting.service.impl;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.ptit.meeting.exception.BusinessException;
 import org.ptit.meeting.modules.auth.entity.User;
@@ -69,7 +72,10 @@ public class MeetingRoomMemberServiceImpl implements MeetingRoomMemberService {
             .role(request.role())
             .build());
 
-    return memberMapper.toResponse(saveMember(member), room.getPublicId());
+    MeetingRoomMemberResponse response = memberMapper.toResponse(
+        saveMember(member), room.getPublicId(), targetUser);
+    eventPublisher.publishEvent(new MeetingRoomAccessChangedEvent(room.getPublicId()));
+    return response;
   }
 
   @Override
@@ -87,16 +93,19 @@ public class MeetingRoomMemberServiceImpl implements MeetingRoomMemberService {
             room.getClassSectionId(), EnrollmentStatus.ENROLLED);
     Long lecturerId = room.getClassSectionId() == null ? null
         : roomRepository.findClassLecturerId(room.getPublicId()).orElse(null);
-    List<MeetingRoomMemberResponse> response = new ArrayList<>();
+    List<ClassEnrollment> activeMembers = new ArrayList<>();
     if (lecturerId != null) {
-      response.add(memberMapper.toResponse(
-          authorizationService.requireActiveMember(room.getPublicId(), lecturerId), room.getPublicId()));
+      activeMembers.add(authorizationService.requireActiveMember(room.getPublicId(), lecturerId));
     }
     members.stream()
         .filter(member -> !member.getUserId().equals(lecturerId))
-        .map(member -> memberMapper.toResponse(member, room.getPublicId()))
-        .forEach(response::add);
-    return response;
+        .forEach(activeMembers::add);
+    Map<Long, User> users = userService.getUsersByIds(
+            activeMembers.stream().map(ClassEnrollment::getUserId).toList()).stream()
+        .collect(Collectors.toMap(User::getId, Function.identity()));
+    return activeMembers.stream()
+        .map(member -> memberMapper.toResponse(member, room.getPublicId(), users.get(member.getUserId())))
+        .toList();
   }
 
   @Override
@@ -135,7 +144,7 @@ public class MeetingRoomMemberServiceImpl implements MeetingRoomMemberService {
     requireMutableMember(member);
     member.setRole(role);
     MeetingRoomMemberResponse response = memberMapper.toResponse(
-        memberRepository.saveAndFlush(member), room.getPublicId());
+        memberRepository.saveAndFlush(member), room.getPublicId(), userService.getUserById(memberUserId));
     eventPublisher.publishEvent(new MeetingRoomAccessChangedEvent(room.getPublicId()));
     return response;
   }

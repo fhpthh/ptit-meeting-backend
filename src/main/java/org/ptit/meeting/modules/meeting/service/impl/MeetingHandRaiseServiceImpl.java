@@ -19,8 +19,8 @@ import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
+import org.ptit.meeting.modules.meeting.constant.enums.RoomType;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingHandRaiseResponse;
-import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
@@ -74,9 +74,6 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
   @Transactional(readOnly = true)
   public MeetingHandRaiseResponse raise(String runtimeSessionId, Long currentUserId) {
     HandRaiseAccess access = requireAccess(runtimeSessionId, currentUserId);
-    if (access.member().getRole() != MeetingRole.PARTICIPANT) {
-      throw BusinessException.unauthorized(MeetingErrorConstants.HAND_RAISE_NOT_ALLOWED);
-    }
 
     MeetingHandRaiseResponse handRaise = storeRaise(
         access.runtimeSession().getPublicId(),
@@ -84,7 +81,7 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
             currentUserId,
             participantIdentity(currentUserId),
             access.user().getFullName(),
-            access.member().getRole(),
+            access.role(),
             Instant.now(),
             true
         )
@@ -97,9 +94,6 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
   @Transactional(readOnly = true)
   public void lower(String runtimeSessionId, Long currentUserId) {
     HandRaiseAccess access = requireAccess(runtimeSessionId, currentUserId);
-    if (access.member().getRole() != MeetingRole.PARTICIPANT) {
-      throw BusinessException.unauthorized(MeetingErrorConstants.HAND_RAISE_NOT_ALLOWED);
-    }
 
     remove(access.runtimeSession().getPublicId(), currentUserId)
         .map(this::lowered)
@@ -268,14 +262,18 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
 
   private HandRaiseAccess requireAccess(String runtimeSessionId, Long currentUserId) {
     MeetingSession runtimeSession = requireActiveRuntimeSession(runtimeSessionId);
-    ClassEnrollment member = authorizationService.requireActiveMember(
+    MeetingRole role = authorizationService.requireRoomAccess(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
     moderationService.requireNotBanned(runtimeSession.getPublicId(), currentUserId);
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
-    return new HandRaiseAccess(runtimeSession, member, user);
+    if (role != MeetingRole.PARTICIPANT
+        && !(role == MeetingRole.VIEWER && runtimeSession.getRoom().getRoomType() == RoomType.EVENT)) {
+      throw BusinessException.unauthorized(MeetingErrorConstants.HAND_RAISE_NOT_ALLOWED);
+    }
+    return new HandRaiseAccess(runtimeSession, role, user);
   }
 
   private MeetingSession requireActiveRuntimeSession(String runtimeSessionId) {
@@ -321,7 +319,7 @@ public class MeetingHandRaiseServiceImpl implements MeetingHandRaiseService {
 
   private record HandRaiseAccess(
       MeetingSession runtimeSession,
-      ClassEnrollment member,
+      MeetingRole role,
       User user
   ) {
   }

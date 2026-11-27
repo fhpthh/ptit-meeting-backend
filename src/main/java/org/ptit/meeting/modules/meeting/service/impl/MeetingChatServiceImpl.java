@@ -22,7 +22,7 @@ import org.ptit.meeting.modules.meeting.constant.MeetingErrorConstants;
 import org.ptit.meeting.modules.meeting.constant.enums.MeetingRuntimeSessionStatus;
 import org.ptit.meeting.modules.meeting.dto.request.MeetingChatMessageRequest;
 import org.ptit.meeting.modules.meeting.dto.response.MeetingChatMessageResponse;
-import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
+import org.ptit.meeting.modules.meeting.constant.enums.MeetingRole;
 import org.ptit.meeting.modules.meeting.entity.MeetingSession;
 import org.ptit.meeting.modules.meeting.repository.MeetingRuntimeSessionRepository;
 import org.ptit.meeting.modules.meeting.service.MeetingAuthorizationService;
@@ -127,7 +127,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
         currentUserId,
         participantIdentity(currentUserId),
         access.user().getFullName(),
-        access.member().getRole(),
+        access.role(),
         content,
         Instant.now()
     );
@@ -286,7 +286,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
 
   private ChatAccess requireChatAccess(String runtimeSessionId, Long currentUserId) {
     MeetingSession runtimeSession = findRuntimeSession(runtimeSessionId);
-    ClassEnrollment member = authorizationService.requireActiveMember(
+    MeetingRole role = authorizationService.requireRoomAccess(
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
@@ -299,7 +299,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
     moderationService.requireNotBanned(runtimeSession.getPublicId(), currentUserId);
     User user = userService.getUserById(currentUserId);
     userService.validateUserStatus(user);
-    return new ChatAccess(runtimeSession, member, user);
+    return new ChatAccess(runtimeSession, role, user);
   }
 
   private MeetingSession findRuntimeSession(String runtimeSessionId) {
@@ -412,7 +412,7 @@ public class MeetingChatServiceImpl implements MeetingChatService {
 
   private record ChatAccess(
       MeetingSession runtimeSession,
-      ClassEnrollment member,
+      MeetingRole role,
       User user
   ) {
   }

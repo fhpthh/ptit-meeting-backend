@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -90,6 +91,30 @@ public class MeetingRuntimeSessionController {
       @AuthenticationPrincipal(expression = "userId") Long currentUserId
   ) {
     joinService.releaseScreenShare(runtimeSessionId, participantSid, currentUserId);
+    return BaseResponse.success((Void) null);
+  }
+
+  @PutMapping("/{runtimeSessionId}/participants/{participantUserId}/speaking-permission")
+  public BaseResponse<Void> grantEventSpeaking(
+      @PathVariable String runtimeSessionId,
+      @PathVariable Long participantUserId,
+      @RequestParam String participantSid,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    joinService.setEventSpeakingPermission(
+        runtimeSessionId, participantUserId, participantSid, true, currentUserId);
+    return BaseResponse.success((Void) null);
+  }
+
+  @DeleteMapping("/{runtimeSessionId}/participants/{participantUserId}/speaking-permission")
+  public BaseResponse<Void> revokeEventSpeaking(
+      @PathVariable String runtimeSessionId,
+      @PathVariable Long participantUserId,
+      @RequestParam String participantSid,
+      @AuthenticationPrincipal(expression = "userId") Long currentUserId
+  ) {
+    joinService.setEventSpeakingPermission(
+        runtimeSessionId, participantUserId, participantSid, false, currentUserId);
     return BaseResponse.success((Void) null);
   }
 

@@ -256,3 +256,93 @@ vẫn kiểm tra ghi danh, ban và trạng thái tài khoản theo quyền hiệ
 Theo yêu cầu không bổ sung lại test; đợt clean kiểm tra bằng Maven compile bỏ test,
 rà soát call site và khởi động ứng dụng với H2 để xác nhận khởi tạo JPA/repository.
 Các kiểm tra này không xác nhận kết nối LiveKit/Redis thực tế.
+
+## 10. Sự kiện dành cho người dùng đã đăng nhập
+
+Sự kiện là phòng `EVENT` với các phiên `MeetingSession` hiện có, không có phòng chờ,
+bảng/cột DB mới, đăng ký trước hoặc tài khoản khách. Backend kiểm tra tài khoản
+ACTIVE trong DB khi liệt kê/truy cập sự kiện, kể cả khi JWT được cấp trước lúc khóa
+tài khoản.
+
+Luồng API:
+
+1. STAFF/ADMIN tạo phòng qua `POST /api/v1/meeting-rooms` với `roomType: "EVENT"`.
+   Kiểm tra vai trò hệ thống nằm trong service, dùng quyền hiện hành từ UserService.
+   Quy tắc tạo CLASS/MEETING không thay đổi trong phạm vi này.
+2. OWNER/HOST tạo phiên qua `POST /api/v1/meeting-rooms/{roomId}/runtime-sessions`
+   và bắt đầu bằng `POST /api/v1/meeting-runtime-sessions/{id}/start`.
+3. Mọi người dùng hợp lệ đã đăng nhập xem danh sách phòng sự kiện ACTIVE qua
+   `GET /api/v1/meeting-rooms/events`, mới nhất trước; response dùng lại
+   `BaseResponse<List<MeetingRoomResponse>>`. Dùng API chi tiết phòng và danh sách
+   phiên hiện có để đọc lịch và trạng thái từng phiên.
+4. Vào phiên ACTIVE qua `POST /api/v1/meeting-runtime-sessions/{id}/join`,
+   nhận token LiveKit ngay sau khi vượt qua kiểm tra giờ vào, sức chứa và ban.
+
+Vai trò thành viên ENROLLED hiện có được giữ nguyên, gồm OWNER/HOST/PARTICIPANT/VIEWER.
+Người chưa là thành viên hoặc đã DROPPED được truy cập sự kiện ACTIVE với vai trò
+VIEWER: được xem/nghe/chat, chưa có quyền phát micro/camera/chia sẻ màn hình. Vai trò
+DROPPED không được khôi phục; muốn chặn người dùng trong một phiên phải dùng ban.
+Không ghi enrollment khi xem/vào sự kiện và không tự thêm sự kiện vào `/my`.
+Người không phải thành viên không được truy cập phòng EVENT đã ARCHIVED.
+
+Quyền tham gia dùng chung cho join, webhook admission, đối soát LiveKit, chat,
+giơ tay, xem bản ghi và trạng thái AI. Quyền điều hành, ghi hình, điểm danh và
+quản lý thành viên vẫn dành cho các vai trò được gán theo quy tắc hiện có;
+ADMIN/STAFF không tự trở thành chủ trì của sự kiện người khác tạo.
+Chủ trì có thể kick/ban/unban người tham gia dù họ không có enrollment.
+Giới hạn hiện hành vẫn là tối đa 100 người/phòng.
+
+Các file test sự kiện đã được xóa theo yêu cầu người dùng, không khôi phục trong
+thay đổi quyền phát biểu. Chạy `mvn test` cho bộ test hiện có và kiểm tra hành vi
+quyền phát biểu bằng harness tạm trong `target`, dùng LiveKit/Redis được mock.
+Các kiểm tra này không xác nhận media hoặc kết nối LiveKit/Redis thực tế.
+
+## 11. Quyền phát biểu tạm thời trong sự kiện
+
+Chỉ OWNER/HOST của phòng được cấp/thu hồi quyền dùng mic/camera cho khán giả VIEWER:
+
+| Method | API | Hành vi |
+|---|---|---|
+| PUT | `/api/v1/meeting-runtime-sessions/{id}/participants/{userId}/speaking-permission?participantSid={sid}` | Cho kết nối hiện tại dùng mic/camera theo setting phòng |
+| DELETE | Cùng URL/query như PUT | Thu hồi cả quyền mic/camera của kết nối đó |
+
+Response dùng `BaseResponse<Void>`. Không thêm DTO, service, endpoint tự kết thúc
+phát biểu phía sinh viên hoặc dữ liệu DB mới. Logic nằm trong MeetingJoinService,
+dùng chung hàm dựng grant, tìm đúng connection và cập nhật quyền với luồng trình chiếu.
+
+Backend kiểm tra EVENT/phiên ACTIVE, quyền chủ trì, trạng thái tài khoản, ban của
+cả chủ trì và người nhận quyền, cùng identity/SID đang kết nối. API từ chối
+CLASS/MEETING và target OWNER/HOST/PARTICIPANT; vai trò được gán cố định tiếp tục
+dùng quyền media hiện có, không bị thao tác phát biểu tạm thời thay đổi.
+Không cần giơ tay trước để chủ trì mời phát biểu. VIEWER được giơ/hạ tay trong EVENT;
+hạ tay và tắt thiết bị không tự thu hồi quyền. Chủ trì chủ động bấm thu hồi.
+
+Ít nhất một setting `participantMicEnabled`/`participantCameraEnabled` phải bật để cấp.
+Cùng một lượt cấp cho phép microphone/camera theo từng setting; thu hồi khóa cả hai.
+Khán giả vẫn là VIEWER, không có quyền trình chiếu hoặc điều hành.
+Client đọc marker để hiện Cấp phép/Thu hồi, theo dõi quyền LiveKit để hiện nút mic/cam
+và để người dùng tự bật thiết bị sau khi được cấp; không tự bật mic/camera.
+Lấy `participantSid` từ participant LiveKit có identity `user-{userId}` hiện tại.
+Không tạo lượt phát biểu tự hết hạn theo thời gian hoặc khoảng im lặng.
+
+Quyền tạm lưu trong participant metadata LiveKit dưới `eventSpeakingSid`, gắn
+với SID và runtime session hiện tại. Token tạo qua API join không chứa quyền tạm.
+Client không có quyền sửa metadata; admission/reconciliation bỏ quyền khi SID hoặc
+session không khớp, khi tài khoản bị khóa/ban hoặc khi cả hai setting media bị tắt.
+SID mới phải được chủ trì cấp lại; reconnect giữ nguyên SID vẫn thuộc cùng kết nối.
+Khi thu hồi, backend xóa marker và cả quyền publish microphone/camera. Bật lại setting
+không khôi phục lượt đã bị thu hồi. Không đổi enrollment hoặc vai trò thành viên.
+
+API cấp/thu hồi, admission và đối soát EVENT cùng giữ khóa bản ghi phiên khi đọc
+snapshot/cập nhật LiveKit. Mỗi lượt đối soát EVENT lấy một snapshot mới dưới khóa,
+sau đó dùng lại snapshot ấy để xét dạy thêm ngoài transaction. Cách này ngăn lượt
+đối soát dùng snapshot trước lúc thu hồi để cấp lại quyền phát biểu. CLASS/MEETING tiếp tục
+lấy snapshot ngoài khóa như mục 9. Lỗi LiveKit không được xem là phòng trống;
+backend trả lỗi provider hoặc thử lại ở lượt đối soát sau.
+
+Thu hồi `CanPublish` khiến LiveKit tự unpublish các track đang phát, theo
+[Participant management](https://docs.livekit.io/intro/basics/rooms-participants-tracks/participants/).
+LiveKit self-hosted không tự vô hiệu hóa token cũ khi cập nhật quyền; marker SID
+được kiểm tra lại qua admission/reconciliation để loại quyền từ token đã refresh
+của kết nối cũ. Đây là kiểm tra sau kết nối, không phải thu hồi JWT trên LiveKit;
+xem [Tokens and grants](https://docs.livekit.io/frontends/reference/tokens-grants/).

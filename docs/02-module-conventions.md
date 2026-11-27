@@ -72,6 +72,30 @@ room được import bởi TKB. Không tạo setting trong entity callback/mappe
 Phân công/vai trò/setting chỉ cập nhật LiveKit sau commit; đối soát định kỳ dùng dữ liệu hiện hành,
 không lưu thêm bản sao quyền hoặc token vào bảng mới. Giới hạn phòng hiện hành là 100 người.
 
+Sự kiện dùng lại `Room.roomType = EVENT` và các API/service meeting hiện có.
+`MeetingAuthorizationService.requireRoomAccess` trả vai trò truy cập: phòng EVENT
+ACTIVE cho mọi tài khoản hợp lệ đã đăng nhập, dùng vai trò thành viên ENROLLED nếu có,
+còn lại là VIEWER. Không tạo enrollment cho người xem/tham gia sự kiện.
+`requireActiveMember`, `requireRoomOwner` và `requireRuntimeSessionHost` tiếp tục
+kiểm tra thành viên thực tế hoặc giảng viên phụ trách; quyền tham gia sự kiện không
+cấp quyền quản lý hay quyền xem danh sách thành viên. CLASS/MEETING vẫn yêu cầu
+thành viên. Các luồng join, admission/reconciliation, chat, giơ tay, đọc phiên, bản ghi
+và trạng thái AI dùng cùng chính sách truy cập này.
+
+Khán giả EVENT có thể giơ/hạ tay; quyền phát biểu tạm thời do OWNER/HOST cấp/thu hồi,
+gắn với SID kết nối trong metadata LiveKit do backend quản lý. Không đổi vai trò,
+ghi enrollment hoặc lưu quyền tạm trong DB/Redis. Cùng một quyền cấp mic/camera theo
+hai setting của phòng; thu hồi xóa cả hai, VIEWER vẫn không được trình chiếu.
+Quyền lưu bằng eventSpeakingSid; marker micro cũ không tự cấp thêm camera.
+Đối soát EVENT đọc snapshot LiveKit sau khi
+khóa phiên, dùng cùng khóa với API cấp/thu hồi để không phục hồi quyền đã thu hồi.
+CLASS/MEETING giữ luồng phân quyền và đọc snapshot hiện có.
+
+Đồng chủ trì sự kiện dùng lại vai trò HOST trong enrollment của chính phòng EVENT;
+không thay đổi vai trò tài khoản hay tạo bảng quyền mới. OWNER cấp/thu hồi qua API thành
+viên hiện có; thu hồi về VIEWER vẫn cho phép xem sự kiện. Danh sách thành viên trả thêm
+fullName/userCode để hiển thị người hỗ trợ, đọc theo lô qua UserService sau kiểm tra quyền.
+
 Giả sử feature là `room` và resource chính là `Room`:
 
 | Vai trò | Package | Tên chuẩn |

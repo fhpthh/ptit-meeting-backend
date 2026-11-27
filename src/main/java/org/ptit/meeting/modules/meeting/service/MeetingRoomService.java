@@ -22,6 +22,8 @@ public interface MeetingRoomService {
 
     List<MeetingRoomResponse> getMyRooms(Long currentUserId);
 
+    List<MeetingRoomResponse> getEvents(Long currentUserId);
+
     MeetingRoomResponse update(
             String roomId,
             MeetingRoomUpdateRequest request,

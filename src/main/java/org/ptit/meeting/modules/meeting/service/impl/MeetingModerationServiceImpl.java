@@ -213,15 +213,15 @@ public class MeetingModerationServiceImpl implements MeetingModerationService {
         runtimeSession.getMeetingRoomId(),
         currentUserId
     );
-    ClassEnrollment target = authorizationService.requireActiveMember(
-        runtimeSession.getMeetingRoomId(),
-        participantUserId
-    );
     if (actor.getRole() != MeetingRole.OWNER && actor.getRole() != MeetingRole.HOST) {
       throw BusinessException.unauthorized(MeetingErrorConstants.ACCESS_DENIED);
     }
-    if (target.getRole() == MeetingRole.OWNER
-        || (actor.getRole() == MeetingRole.HOST && target.getRole() == MeetingRole.HOST)) {
+    MeetingRole targetRole = authorizationService.requireRoomAccess(
+        runtimeSession.getMeetingRoomId(),
+        participantUserId
+    );
+    if (targetRole == MeetingRole.OWNER
+        || (actor.getRole() == MeetingRole.HOST && targetRole == MeetingRole.HOST)) {
       throw BusinessException.unauthorized(
           MeetingErrorConstants.MODERATION_TARGET_PROTECTED
       );
