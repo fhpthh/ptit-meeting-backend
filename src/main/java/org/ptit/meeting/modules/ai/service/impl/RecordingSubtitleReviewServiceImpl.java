@@ -155,6 +155,24 @@ public class RecordingSubtitleReviewServiceImpl implements RecordingSubtitleRevi
 
   @Override
   @Transactional
+  public RecordingSubtitleReviewResponse unpublish(String id, Long user, long revision) {
+    enabled();
+    manager(id, user);
+    var r = require(id, revision);
+    if (r.getPublishedRevision() != null) {
+      r.setPublishedJson(null);
+      r.setPublishedRevision(null);
+      r.setRevision(revision + 1);
+      var document = (ObjectNode) parse(r.getDocumentJson());
+      document.put("documentRevision", r.getRevision());
+      r.setDocumentJson(write(document));
+      reviews.saveAndFlush(r);
+    }
+    return response(r);
+  }
+
+  @Override
+  @Transactional
   public void delete(String id, Long user, long revision) {
     enabled();
     manager(id, user);

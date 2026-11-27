@@ -14,6 +14,8 @@ public interface RecordingSubtitleReviewService {
 
   RecordingSubtitleReviewResponse publish(String recordingId, Long userId, long expectedRevision);
 
+  RecordingSubtitleReviewResponse unpublish(String recordingId, Long userId, long expectedRevision);
+
   void delete(String recordingId, Long userId, long expectedRevision);
 
   JsonNode published(String recordingId, Long userId);

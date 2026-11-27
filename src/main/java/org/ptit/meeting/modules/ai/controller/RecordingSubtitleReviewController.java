@@ -58,6 +58,14 @@ public class RecordingSubtitleReviewController {
     return BaseResponse.success(service.publish(recordingId, userId, request.expectedRevision()));
   }
 
+  @PostMapping("/unpublish")
+  public BaseResponse<RecordingSubtitleReviewResponse> unpublish(
+      @PathVariable String recordingId,
+      @AuthenticationPrincipal(expression = "userId") Long userId,
+      @Valid @RequestBody Revision request) {
+    return BaseResponse.success(service.unpublish(recordingId, userId, request.expectedRevision()));
+  }
+
   @DeleteMapping
   public BaseResponse<Boolean> delete(
       @PathVariable String recordingId,
