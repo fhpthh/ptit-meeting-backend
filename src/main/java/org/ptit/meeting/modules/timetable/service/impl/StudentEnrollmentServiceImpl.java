@@ -1,6 +1,8 @@
 package org.ptit.meeting.modules.timetable.service.impl;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.ptit.meeting.exception.BusinessException;
@@ -13,9 +15,12 @@ import org.ptit.meeting.modules.timetable.dto.internal.TimetableProcessResult;
 import org.ptit.meeting.modules.timetable.dto.response.ImportRowError;
 import org.ptit.meeting.modules.timetable.entity.ClassEnrollment;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
+import org.ptit.meeting.modules.timetable.event.StudentEnrolledInClassSectionEvent;
 import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
+import org.ptit.meeting.modules.timetable.repository.ClassSchedulerRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
 import org.ptit.meeting.modules.timetable.service.StudentEnrollmentService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +31,9 @@ public class StudentEnrollmentServiceImpl implements StudentEnrollmentService {
 
   private final ClassSectionRepository classSectionRepository;
   private final ClassEnrollmentRepository enrollmentRepository;
+  private final ClassSchedulerRepository classSchedulerRepository;
   private final UserService userService;
+  private final ApplicationEventPublisher eventPublisher;
 
   @Override
   @Transactional
@@ -40,6 +47,7 @@ public class StudentEnrollmentServiceImpl implements StudentEnrollmentService {
         .orElseThrow(() -> BusinessException.notExisted(TimetableErrorConstants.CLASS_SECTION_NOT_FOUND));
 
     int successCount = 0;
+    Set<Long> newlyEnrolledStudentIds = new LinkedHashSet<>();
 
     for (int i = 0; i < rows.size(); i++) {
       StudentEnrollmentRowDto row = rows.get(i);
@@ -66,6 +74,7 @@ public class StudentEnrollmentServiceImpl implements StudentEnrollmentService {
               .status(EnrollmentStatus.ENROLLED)
               .build();
           enrollmentRepository.save(enrollment);
+          newlyEnrolledStudentIds.add(student.getId());
         }
 
         successCount++;
@@ -73,6 +82,17 @@ public class StudentEnrollmentServiceImpl implements StudentEnrollmentService {
         log.error("(processStudentEnrollments) Error at row {}: {}", rowNumber, ex.getMessage());
         errors.add(new ImportRowError(rowNumber, "Lỗi sinh viên " + row.getStudentCode() + ": " + ex.getMessage()));
       }
+    }
+
+    if (eventPublisher != null
+        && !newlyEnrolledStudentIds.isEmpty()
+        && classSchedulerRepository != null
+        && classSchedulerRepository.existsByClassSectionIdAndIsOnlineTrue(classSection.getId())) {
+      eventPublisher.publishEvent(new StudentEnrolledInClassSectionEvent(
+          classSection.getId(),
+          classSection.getClassCode(),
+          newlyEnrolledStudentIds
+      ));
     }
 
     return TimetableProcessResult.builder()

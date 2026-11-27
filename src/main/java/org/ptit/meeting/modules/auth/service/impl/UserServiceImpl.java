@@ -101,6 +101,33 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByAccountTypes(Collection<AccountType> accountTypes) {
+    if (accountTypes == null || accountTypes.isEmpty()) {
+      return List.of();
+    }
+    return userRepository.findIdsByAccountTypeInAndStatus(accountTypes, UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByIds(Collection<Long> userIds) {
+    if (userIds == null || userIds.isEmpty()) {
+      return List.of();
+    }
+    return userRepository.findIdsByIdInAndStatus(userIds, UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<Long> findActiveUserIdsByDepartment(String department) {
+    if (department == null || department.isBlank()) {
+      return List.of();
+    }
+    return userRepository.findIdsByDepartmentIgnoreCaseAndStatus(department.trim(), UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<User> searchLecturers(String keyword) {
     String normalized = keyword == null || keyword.isBlank() ? null : keyword.trim();
     return userRepository.searchActiveLecturers(AccountType.LECTURER, UserStatus.ACTIVE,

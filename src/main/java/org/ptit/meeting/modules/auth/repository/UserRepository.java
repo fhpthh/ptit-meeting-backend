@@ -1,6 +1,7 @@
 
 package org.ptit.meeting.modules.auth.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.ptit.meeting.modules.auth.entity.User;
@@ -49,4 +50,37 @@ public interface UserRepository extends JpaRepository<User, Long> {
   long countByAccountType(AccountType accountType);
 
   long countByAccountTypeAndStatus(AccountType accountType, UserStatus status);
+
+  @Query("""
+      SELECT u.id FROM User u
+      WHERE u.status = :status
+        AND u.accountType IN :accountTypes
+      ORDER BY u.id ASC
+      """)
+  List<Long> findIdsByAccountTypeInAndStatus(
+      @Param("accountTypes") Collection<AccountType> accountTypes,
+      @Param("status") UserStatus status
+  );
+
+  @Query("""
+      SELECT u.id FROM User u
+      WHERE u.status = :status
+        AND u.id IN :ids
+      ORDER BY u.id ASC
+      """)
+  List<Long> findIdsByIdInAndStatus(
+      @Param("ids") Collection<Long> ids,
+      @Param("status") UserStatus status
+  );
+
+  @Query("""
+      SELECT u.id FROM User u
+      WHERE u.status = :status
+        AND LOWER(u.department) = LOWER(:department)
+      ORDER BY u.id ASC
+      """)
+  List<Long> findIdsByDepartmentIgnoreCaseAndStatus(
+      @Param("department") String department,
+      @Param("status") UserStatus status
+  );
 }

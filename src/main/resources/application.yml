@@ -70,6 +70,21 @@ application:
     api-secret: ${LIVEKIT_API_SECRET:}
     join-token-ttl-ms: ${LIVEKIT_JOIN_TOKEN_TTL_MS:600000}
 
+  notification:
+    recipient-batch-size: ${NOTIFICATION_RECIPIENT_BATCH_SIZE:500}
+    max-target-users: ${NOTIFICATION_MAX_TARGET_USERS:10000}
+    default-page-size: ${NOTIFICATION_DEFAULT_PAGE_SIZE:20}
+    max-page-size: ${NOTIFICATION_MAX_PAGE_SIZE:100}
+    min-reminder-minutes: ${NOTIFICATION_MIN_REMINDER_MINUTES:30}
+    max-reminder-minutes: ${NOTIFICATION_MAX_REMINDER_MINUTES:120}
+    default-reminder-minutes: ${NOTIFICATION_DEFAULT_REMINDER_MINUTES:30}
+    reminder-enabled: ${NOTIFICATION_REMINDER_ENABLED:true}
+    reminder-scan-interval-ms: ${NOTIFICATION_REMINDER_SCAN_INTERVAL_MS:60000}
+    reminder-lock-key: ${NOTIFICATION_REMINDER_LOCK_KEY:lock:notification:online-class-reminder}
+    reminder-lock-ttl-ms: ${NOTIFICATION_REMINDER_LOCK_TTL_MS:55000}
+    schedule-zone-id: ${NOTIFICATION_SCHEDULE_ZONE_ID:Asia/Ho_Chi_Minh}
+    default-locale: ${NOTIFICATION_DEFAULT_LOCALE:vi}
+
   recording:
     enabled: ${RECORDING_ENABLED:false}
     cleanup-interval-ms: ${RECORDING_CLEANUP_INTERVAL_MS:120000}
