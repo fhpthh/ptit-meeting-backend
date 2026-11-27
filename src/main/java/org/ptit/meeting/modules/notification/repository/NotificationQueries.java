@@ -100,6 +100,16 @@ public final class NotificationQueries {
         )
       """;
 
+  public static final String FIND_NOTIFIED_USER_IDS = """
+      SELECT DISTINCT r.userId
+      FROM NotificationRecipient r
+      JOIN Notification n ON n.id = r.notificationId
+      WHERE n.type = :type
+        AND n.referenceType = :referenceType
+        AND n.referenceId = :referenceId
+        AND n.deleted = false
+      """;
+
   private NotificationQueries() {
   }
 }

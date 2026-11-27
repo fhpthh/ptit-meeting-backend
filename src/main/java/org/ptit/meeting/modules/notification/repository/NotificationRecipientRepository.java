@@ -2,6 +2,7 @@ package org.ptit.meeting.modules.notification.repository;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationCategory;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationType;
 import org.ptit.meeting.modules.notification.dto.internal.UserNotificationRow;
@@ -32,4 +33,11 @@ public interface NotificationRecipientRepository extends JpaRepository<Notificat
   @Modifying
   @Query(NotificationQueries.MARK_ALL_READ)
   int markAllAsReadByUserId(@Param("userId") Long userId, @Param("readAt") Instant readAt);
+
+  @Query(NotificationQueries.FIND_NOTIFIED_USER_IDS)
+  Set<Long> findNotifiedUserIds(
+      @Param("type") NotificationType type,
+      @Param("referenceType") String referenceType,
+      @Param("referenceId") String referenceId
+  );
 }

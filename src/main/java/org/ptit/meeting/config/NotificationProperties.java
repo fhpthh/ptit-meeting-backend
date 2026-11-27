@@ -18,4 +18,10 @@ public class NotificationProperties {
   private int minReminderMinutes = 30;
   private int maxReminderMinutes = 120;
   private int defaultReminderMinutes = 30;
+  private boolean reminderEnabled = true;
+  private long reminderScanIntervalMs = 60_000L;
+  private String reminderLockKey = "lock:notification:online-class-reminder";
+  private long reminderLockTtlMs = 55_000L;
+  private String scheduleZoneId = "Asia/Ho_Chi_Minh";
+  private String defaultLocale = "vi";
 }
