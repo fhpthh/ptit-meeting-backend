@@ -24,4 +24,8 @@ public class NotificationProperties {
   private long reminderLockTtlMs = 55_000L;
   private String scheduleZoneId = "Asia/Ho_Chi_Minh";
   private String defaultLocale = "vi";
+  private boolean sseEnabled = true;
+  private long sseTimeoutMs = 1_800_000L;
+  private long sseHeartbeatIntervalMs = 25_000L;
+  private int maxSseConnectionsPerUser = 5;
 }

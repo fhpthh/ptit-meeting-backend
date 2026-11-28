@@ -11,6 +11,7 @@ public final class NotificationErrorConstants {
   public static final String TARGET_DEPARTMENT_REQUIRED = "error.notification.target-department-required";
   public static final String TARGET_CLASS_SECTIONS_REQUIRED = "error.notification.target-class-sections-required";
   public static final String TARGET_USERS_REQUIRED = "error.notification.target-users-required";
+  public static final String TARGET_USER_EMAILS_NOT_FOUND = "error.notification.target-user-emails-not-found";
   public static final String RECIPIENTS_EMPTY = "error.notification.recipients-empty";
   public static final String RECIPIENTS_LIMIT_EXCEEDED = "error.notification.recipients-limit-exceeded";
   public static final String STUDENT_NOT_IN_CLASS_SECTIONS = "error.notification.student-not-in-class-sections";

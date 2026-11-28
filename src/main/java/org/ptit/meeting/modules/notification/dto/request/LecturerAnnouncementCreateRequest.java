@@ -1,5 +1,6 @@
 package org.ptit.meeting.modules.notification.dto.request;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -28,6 +29,8 @@ public record LecturerAnnouncementCreateRequest(
     List<@NotNull(message = "{validation.notification.id.required}") @Positive(message = "{validation.notification.id.positive}") Long> classSectionIds,
 
     List<@NotNull(message = "{validation.notification.id.required}") @Positive(message = "{validation.notification.id.positive}") Long> studentIds,
+
+    List<@NotBlank(message = "{validation.notification.email.invalid}") @Email(message = "{validation.notification.email.invalid}") String> studentEmails,
 
     Set<DeliveryChannel> channels
 ) {

@@ -84,6 +84,10 @@ application:
     reminder-lock-ttl-ms: ${NOTIFICATION_REMINDER_LOCK_TTL_MS:55000}
     schedule-zone-id: ${NOTIFICATION_SCHEDULE_ZONE_ID:Asia/Ho_Chi_Minh}
     default-locale: ${NOTIFICATION_DEFAULT_LOCALE:vi}
+    sse-enabled: ${NOTIFICATION_SSE_ENABLED:true}
+    sse-timeout-ms: ${NOTIFICATION_SSE_TIMEOUT_MS:1800000}
+    sse-heartbeat-interval-ms: ${NOTIFICATION_SSE_HEARTBEAT_INTERVAL_MS:25000}
+    max-sse-connections-per-user: ${NOTIFICATION_MAX_SSE_CONNECTIONS_PER_USER:5}
 
   recording:
     enabled: ${RECORDING_ENABLED:false}

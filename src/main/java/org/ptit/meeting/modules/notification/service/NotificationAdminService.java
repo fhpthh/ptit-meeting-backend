@@ -5,6 +5,7 @@ import org.ptit.meeting.modules.notification.constant.enums.NotificationCategory
 import org.ptit.meeting.modules.notification.constant.enums.NotificationPriority;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationType;
 import org.ptit.meeting.modules.notification.dto.request.AdminAnnouncementCreateRequest;
+import org.ptit.meeting.modules.notification.dto.response.AdminAudienceOptionsResponse;
 import org.ptit.meeting.modules.notification.dto.response.AnnouncementResponse;
 
 public interface NotificationAdminService {
@@ -23,4 +24,6 @@ public interface NotificationAdminService {
   AnnouncementResponse getAnnouncementDetail(String notificationId);
 
   void deleteAnnouncement(String notificationId);
+
+  AdminAudienceOptionsResponse getAudienceOptions(String keyword);
 }

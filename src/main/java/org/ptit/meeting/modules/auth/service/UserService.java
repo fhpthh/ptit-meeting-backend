@@ -2,6 +2,7 @@ package org.ptit.meeting.modules.auth.service;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
 import org.ptit.meeting.modules.auth.entity.User;
@@ -20,7 +21,11 @@ public interface UserService {
 
   List<Long> findActiveUserIdsByIds(Collection<Long> userIds);
 
+  Map<String, Long> findActiveUserIdsByEmails(Collection<String> emails);
+
   List<Long> findActiveUserIdsByDepartment(String department);
+
+  List<String> findActiveDepartments();
 
   List<User> searchLecturers(String keyword);
 

@@ -27,6 +27,7 @@ import org.ptit.meeting.modules.notification.repository.NotificationRecipientRep
 import org.ptit.meeting.modules.notification.repository.NotificationRepository;
 import org.ptit.meeting.modules.notification.service.NotificationDispatchService;
 import org.ptit.meeting.modules.notification.service.NotificationPublisherService;
+import org.ptit.meeting.modules.notification.service.NotificationRealtimeService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -40,6 +41,7 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
   private final NotificationRecipientRepository recipientRepository;
   private final NotificationDeliveryRepository deliveryRepository;
   private final NotificationDispatchService dispatchService;
+  private final NotificationRealtimeService realtimeService;
   private final NotificationProperties properties;
 
   @Override
@@ -82,8 +84,9 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
     Notification saved = notificationRepository.save(notification);
 
     Set<DeliveryChannel> channels = resolveChannels(command.channels());
+    List<NotificationRecipient> savedRecipients = List.of();
     if (channels.contains(DeliveryChannel.IN_APP)) {
-      persistRecipientsInBatches(saved.getId(), recipients);
+      savedRecipients = persistRecipientsInBatches(saved.getId(), recipients);
     }
 
     Set<DeliveryChannel> externalChannels = channels.stream()
@@ -92,8 +95,10 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
 
     if (!externalChannels.isEmpty()) {
       persistDeliveriesInBatches(saved.getId(), recipients, externalChannels);
-      scheduleDispatchAfterCommit(saved.getId());
     }
+
+    // Push realtime SSE and dispatch external channels only after DB commit succeeds.
+    schedulePostCommitDelivery(saved, savedRecipients, !externalChannels.isEmpty());
 
     return new NotificationPublishResult(saved, recipients.size(), false);
   }
@@ -117,8 +122,12 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
     return resolved;
   }
 
-  private void persistRecipientsInBatches(String notificationId, Set<Long> userIds) {
+  private List<NotificationRecipient> persistRecipientsInBatches(
+      String notificationId,
+      Set<Long> userIds
+  ) {
     int batchSize = Math.max(1, properties.getRecipientBatchSize());
+    List<NotificationRecipient> allSaved = new ArrayList<>(userIds.size());
     List<NotificationRecipient> batch = new ArrayList<>(batchSize);
     for (Long userId : userIds) {
       batch.add(NotificationRecipient.builder()
@@ -127,13 +136,14 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
           .read(false)
           .build());
       if (batch.size() >= batchSize) {
-        recipientRepository.saveAll(batch);
+        allSaved.addAll(recipientRepository.saveAll(batch));
         batch.clear();
       }
     }
     if (!batch.isEmpty()) {
-      recipientRepository.saveAll(batch);
+      allSaved.addAll(recipientRepository.saveAll(batch));
     }
+    return allSaved;
   }
 
   private void persistDeliveriesInBatches(
@@ -163,16 +173,29 @@ public class NotificationPublisherServiceImpl implements NotificationPublisherSe
     }
   }
 
-  private void scheduleDispatchAfterCommit(String notificationId) {
+  private void schedulePostCommitDelivery(
+      Notification notification,
+      List<NotificationRecipient> savedRecipients,
+      boolean hasExternalChannels
+  ) {
+    Runnable postCommitAction = () -> {
+      if (!savedRecipients.isEmpty()) {
+        realtimeService.pushToUsers(notification, savedRecipients);
+      }
+      if (hasExternalChannels) {
+        dispatchService.dispatchPendingDeliveries(notification.getId());
+      }
+    };
+
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
         @Override
         public void afterCommit() {
-          dispatchService.dispatchPendingDeliveries(notificationId);
+          postCommitAction.run();
         }
       });
     } else {
-      dispatchService.dispatchPendingDeliveries(notificationId);
+      postCommitAction.run();
     }
   }
 

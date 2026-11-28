@@ -74,13 +74,35 @@ public interface UserRepository extends JpaRepository<User, Long> {
   );
 
   @Query("""
+      SELECT u FROM User u
+      WHERE u.status = :status
+        AND LOWER(u.email) IN :emails
+      ORDER BY u.id ASC
+      """)
+  List<User> findByEmailLowerInAndStatus(
+      @Param("emails") Collection<String> emails,
+      @Param("status") UserStatus status
+  );
+
+  @Query("""
       SELECT u.id FROM User u
       WHERE u.status = :status
-        AND LOWER(u.department) = LOWER(:department)
+        AND u.department IS NOT NULL
+        AND (LOWER(TRIM(u.department)) = LOWER(:department)
+          OR LOWER(u.department) LIKE LOWER(CONCAT('%', :department, '%')))
       ORDER BY u.id ASC
       """)
   List<Long> findIdsByDepartmentIgnoreCaseAndStatus(
       @Param("department") String department,
       @Param("status") UserStatus status
   );
+
+  @Query("""
+      SELECT DISTINCT TRIM(u.department) FROM User u
+      WHERE u.status = :status
+        AND u.department IS NOT NULL
+        AND TRIM(u.department) <> ''
+      ORDER BY TRIM(u.department) ASC
+      """)
+  List<String> findDistinctDepartmentsByStatus(@Param("status") UserStatus status);
 }

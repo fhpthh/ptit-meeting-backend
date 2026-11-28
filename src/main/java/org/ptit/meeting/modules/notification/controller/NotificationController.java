@@ -16,7 +16,9 @@ import org.ptit.meeting.modules.notification.dto.response.UnreadCountResponse;
 import org.ptit.meeting.modules.notification.dto.response.UserNotificationResponse;
 import org.ptit.meeting.modules.notification.service.NotificationInboxService;
 import org.ptit.meeting.modules.notification.service.NotificationPreferenceService;
+import org.ptit.meeting.modules.notification.service.NotificationRealtimeService;
 import org.ptit.meeting.utils.MessageUtil;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/notifications")
@@ -37,7 +40,16 @@ public class NotificationController {
 
   private final NotificationInboxService inboxService;
   private final NotificationPreferenceService preferenceService;
+  private final NotificationRealtimeService realtimeService;
   private final MessageUtil messageUtil;
+
+  @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @Operation(summary = "Subscribe to realtime notifications via Server-Sent Events (SSE)")
+  public SseEmitter streamNotifications(
+      @AuthenticationPrincipal CustomUserDetails currentUser
+  ) {
+    return realtimeService.subscribe(currentUser.getUserId());
+  }
 
   @GetMapping
   @Operation(summary = "Get current user's notification inbox")
