@@ -1,7 +1,11 @@
 # Student administration API
 
-All routes under `/api/v1/admin/students` require `ROLE_ADMIN`. Anonymous requests receive
-401 and authenticated callers without that role receive 403. JSON responses use
+All routes under `/api/v1/admin/students` require `ROLE_STAFF` or `ROLE_ADMIN`, including
+search, profile details, exports, timetable reads, creation, updates, academic assignment,
+status/bulk changes, local password reset and archive. Both roles manage only STUDENT accounts
+through these endpoints; creation always assigns ROLE_STUDENT, without accepting a global role
+from the caller. Anonymous requests receive 401 and other authenticated roles receive 403.
+JSON responses use
 `BaseResponse`. List and enrollment responses wrap `PageResponseDTO` with `content`, `page`,
 `size`, `totalElements`, `totalPages`, and `last`. Exports return attachments.
 
@@ -72,7 +76,7 @@ enrollments.
 
 ## Academic structure
 
-All routes below require `ROLE_ADMIN` and use `/api/v1/admin/student-structure`:
+All routes below require `ROLE_STAFF` or `ROLE_ADMIN` and use `/api/v1/admin/student-structure`:
 
 | Method and path | Purpose |
 | --- | --- |
