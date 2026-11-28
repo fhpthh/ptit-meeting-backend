@@ -17,6 +17,8 @@ import java.util.UUID;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.ptit.meeting.modules.auth.constant.enums.AccountType;
 import org.ptit.meeting.modules.auth.constant.enums.UserStatus;
 import org.ptit.meeting.modules.auth.entity.Role;
@@ -71,9 +73,11 @@ class StudentAdminIntegrationTest {
   @MockitoBean private TokenService tokenService;
 
   @Test
-  void requiresAnAdminJwtForBothRootAndNestedRoutes() throws Exception {
+  void permitsStaffAndAdminStudentManagementButRejectsOtherRoles() throws Exception {
     mvc.perform(get(BASE)).andExpect(status().isUnauthorized());
-    for (String role : Set.of("ROLE_STAFF", "ROLE_STUDENT", "ROLE_LECTURER")) {
+    mvc.perform(get("/api/v1/admin/student-structure/options"))
+        .andExpect(status().isUnauthorized());
+    for (String role : Set.of("ROLE_STUDENT", "ROLE_LECTURER")) {
       mvc.perform(get(BASE).header(HttpHeaders.AUTHORIZATION, bearer(role)))
           .andExpect(status().isForbidden());
       mvc.perform(patch(BASE + "/bulk-status").header(HttpHeaders.AUTHORIZATION, bearer(role))
@@ -81,15 +85,57 @@ class StudentAdminIntegrationTest {
                   {"ids":[1],"status":"LOCKED"}
                   """))
           .andExpect(status().isForbidden());
+      mvc.perform(get("/api/v1/admin/student-structure/options")
+              .header(HttpHeaders.AUTHORIZATION, bearer(role)))
+          .andExpect(status().isForbidden());
     }
     mvc.perform(get(BASE + "/summary").header(HttpHeaders.AUTHORIZATION, bearer("ROLE_ADMIN")))
         .andExpect(status().isOk());
+    User student = account("managed", AccountType.STUDENT, null, UserStatus.ACTIVE, "Student");
+    String staff = bearer("ROLE_STAFF");
+    mvc.perform(get(BASE).header(HttpHeaders.AUTHORIZATION, staff))
+        .andExpect(status().isOk());
+    mvc.perform(get(BASE + "/{id}", student.getId()).header(HttpHeaders.AUTHORIZATION, staff))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.id").value(student.getId().intValue()));
+    mvc.perform(get(BASE + "/export").param("format", "CSV")
+            .header(HttpHeaders.AUTHORIZATION, staff))
+        .andExpect(status().isOk());
+    for (String path : Set.of("options", "tree")) {
+      mvc.perform(get("/api/v1/admin/student-structure/" + path)
+              .header(HttpHeaders.AUTHORIZATION, staff))
+          .andExpect(status().isOk());
+    }
+    mvc.perform(patch(BASE + "/{id}/status", student.getId())
+            .header(HttpHeaders.AUTHORIZATION, staff)
+            .contentType(MediaType.APPLICATION_JSON).content("""
+                {"status":"LOCKED"}
+                """))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content.status").value("LOCKED"));
+    mvc.perform(post(BASE + "/{id}/reset-password", student.getId())
+            .header(HttpHeaders.AUTHORIZATION, staff)
+            .contentType(MediaType.APPLICATION_JSON).content("""
+                {"temporaryPassword":"replacement-secret"}
+                """))
+        .andExpect(status().isOk());
+    mvc.perform(delete(BASE + "/{id}", student.getId()).header(HttpHeaders.AUTHORIZATION, staff))
+        .andExpect(status().isOk());
+    assertThat(users.findById(student.getId()).orElseThrow().getStatus()).isEqualTo(UserStatus.INACTIVE);
+    mvc.perform(post("/api/v1/admin/student-structure/campuses")
+            .header(HttpHeaders.AUTHORIZATION, staff)
+            .contentType(MediaType.APPLICATION_JSON).content("""
+                {"code":"TEST","name":"Test campus"}
+                """))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.content.code").value("TEST"));
   }
 
-  @Test
-  void createsUpdatesAndResetsOnlyTheLocalStudentAccount() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"ROLE_ADMIN", "ROLE_STAFF"})
+  void createsUpdatesAndResetsOnlyTheLocalStudentAccount(String role) throws Exception {
     roles.saveAndFlush(Role.builder().code("ROLE_STUDENT").name("Student").build());
-    String admin = bearer("ROLE_ADMIN");
+    String admin = bearer(role);
     mvc.perform(post(BASE).header(HttpHeaders.AUTHORIZATION, admin)
             .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
         .andExpect(status().isCreated())
@@ -197,11 +243,12 @@ class StudentAdminIntegrationTest {
     }
   }
 
-  @Test
-  void rejectsMixedBulkTargetsWithoutChangingAnyStatus() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"ROLE_ADMIN", "ROLE_STAFF"})
+  void rejectsMixedBulkTargetsWithoutChangingAnyStatus(String role) throws Exception {
     User student = account("student", AccountType.STUDENT, null, UserStatus.ACTIVE, "Student");
     User staff = account("staff", AccountType.STAFF, null, UserStatus.ACTIVE, "Staff");
-    String admin = bearer("ROLE_ADMIN");
+    String admin = bearer(role);
     mvc.perform(patch(BASE + "/bulk-status").header(HttpHeaders.AUTHORIZATION, admin)
             .contentType(MediaType.APPLICATION_JSON).content("""
                 {"ids":[%d,%d],"status":"LOCKED"}
@@ -213,8 +260,9 @@ class StudentAdminIntegrationTest {
         .andExpect(status().isNotFound());
   }
 
-  @Test
-  void archivesReferencedStudentAndReadsOnlyClassEnrollmentsFromTimetable() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"ROLE_ADMIN", "ROLE_STAFF"})
+  void archivesReferencedStudentAndReadsOnlyClassEnrollmentsFromTimetable(String role) throws Exception {
     User student = account("student", AccountType.STUDENT, null, UserStatus.ACTIVE, "Student");
     ClassSection section = sections.saveAndFlush(ClassSection.builder()
         .semesterId(101L).subjectId(201L).classCode("TEST-01").build());
@@ -222,7 +270,7 @@ class StudentAdminIntegrationTest {
         .classSectionId(section.getId()).userId(student.getId()).status(EnrollmentStatus.DROPPED).build());
     enrollments.saveAndFlush(ClassEnrollment.builder()
         .roomId(UUID.randomUUID().toString()).userId(student.getId()).build());
-    String admin = bearer("ROLE_ADMIN");
+    String admin = bearer(role);
     mvc.perform(patch(BASE + "/bulk-status").header(HttpHeaders.AUTHORIZATION, admin)
             .contentType(MediaType.APPLICATION_JSON).content("""
                 {"ids":[%d,%d],"status":"LOCKED"}

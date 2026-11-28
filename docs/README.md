@@ -54,3 +54,11 @@ Không duy trì hai convention song song.
 - Response API: `BaseResponse<T>`.
 - Message và validation: chỉ dùng bundle `src/main/resources/i18n/messages*.properties`.
 - Không khôi phục cấu trúc hexagonal `layer/domain/application/infrastructure`.
+
+## Tìm kiếm giảng viên - 2026-11-28
+
+`GET /api/v1/admin/lecturers?keyword=...` tìm theo một phần họ tên, mã, email hoặc
+khoa/bộ môn, không phân biệt chữ hoa/thường. Các điều kiện keyword được nhóm OR,
+kết hợp AND với loại tài khoản LECTURER, trạng thái và bộ lọc department hiện có.
+Frontend Admin/Staff dùng một ô keyword chung thay cho ô nhập riêng khoa/bộ môn.
+Theo yêu cầu người dùng, không tạo thêm file test; chạy lại bộ test hiện có bằng `mvn test`.

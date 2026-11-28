@@ -62,7 +62,7 @@ public class SecurityConfig {
             .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
             .requestMatchers("/api/v1/admin/students", "/api/v1/admin/students/**",
                 "/api/v1/admin/student-structure", "/api/v1/admin/student-structure/**")
-            .hasRole("ADMIN")
+            .hasAnyRole("STAFF", "ADMIN")
             .requestMatchers("/api/v1/admin/**").hasAnyRole("STAFF", "ADMIN")
             .requestMatchers("/api/v1/student/**").hasAnyRole("STUDENT", "STAFF", "ADMIN")
             .requestMatchers("/api/v1/lecturer/**").hasAnyRole("LECTURER", "STAFF", "ADMIN")

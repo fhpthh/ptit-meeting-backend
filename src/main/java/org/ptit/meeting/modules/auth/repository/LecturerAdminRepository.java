@@ -19,7 +19,8 @@ public interface LecturerAdminRepository extends JpaRepository<User, Long> {
         AND (:department IS NULL OR LOWER(u.department) = LOWER(:department))
         AND (:keyword IS NULL OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
           OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
-          OR LOWER(u.code) LIKE LOWER(CONCAT('%', :keyword, '%')))
+          OR LOWER(u.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR LOWER(u.department) LIKE LOWER(CONCAT('%', :keyword, '%')))
       """)
   Page<User> search(
       @Param("type") AccountType type,
