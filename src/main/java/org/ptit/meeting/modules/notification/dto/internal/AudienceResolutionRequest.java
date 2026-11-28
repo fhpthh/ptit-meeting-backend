@@ -9,6 +9,7 @@ public record AudienceResolutionRequest(
     AccountType targetRole,
     String targetDepartment,
     List<Long> classSectionIds,
-    List<Long> userIds
+    List<Long> userIds,
+    List<String> userEmails
 ) {
 }

@@ -1,12 +1,16 @@
 package org.ptit.meeting.modules.notification.service.impl;
 
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.ptit.meeting.common.dto.response.PageResponseDTO;
 import org.ptit.meeting.config.NotificationProperties;
 import org.ptit.meeting.exception.BusinessException;
+import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.notification.constant.NotificationErrorConstants;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationCategory;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationPriority;
@@ -31,16 +35,19 @@ public class LecturerNotificationServiceImpl extends AbstractAnnouncementService
   private static final String CLASS_SECTION_REFERENCE_TYPE = "CLASS_SECTION";
 
   private final ClassSectionAudienceService classSectionAudienceService;
+  private final UserService userService;
 
   public LecturerNotificationServiceImpl(
       NotificationRepository notificationRepository,
       NotificationPublisherService publisherService,
       NotificationMapper notificationMapper,
       NotificationProperties properties,
-      ClassSectionAudienceService classSectionAudienceService
+      ClassSectionAudienceService classSectionAudienceService,
+      UserService userService
   ) {
     super(notificationRepository, publisherService, notificationMapper, properties);
     this.classSectionAudienceService = classSectionAudienceService;
+    this.userService = userService;
   }
 
   @Override
@@ -59,7 +66,11 @@ public class LecturerNotificationServiceImpl extends AbstractAnnouncementService
     Set<Long> enrolledStudentIds = classSectionAudienceService
         .findOwnedClassSectionStudentIds(lecturerUserId, sectionIds);
 
-    Set<Long> targetRecipients = resolveStudentSubset(enrolledStudentIds, request.studentIds());
+    Set<Long> targetRecipients = resolveStudentSubset(
+        enrolledStudentIds,
+        request.studentIds(),
+        request.studentEmails()
+    );
     targetRecipients.remove(lecturerUserId);
 
     String targetRef = sectionIds.stream()
@@ -142,23 +153,61 @@ public class LecturerNotificationServiceImpl extends AbstractAnnouncementService
     }
   }
 
-  private Set<Long> resolveStudentSubset(Set<Long> enrolledStudentIds,
-      java.util.List<Long> requestedStudentIds) {
-    if (requestedStudentIds == null || requestedStudentIds.isEmpty()) {
+  private Set<Long> resolveStudentSubset(
+      Set<Long> enrolledStudentIds,
+      List<Long> requestedStudentIds,
+      List<String> requestedStudentEmails
+  ) {
+    Set<String> normalizedEmails = requestedStudentEmails == null
+        ? Set.of()
+        : requestedStudentEmails.stream()
+            .filter(email -> email != null && !email.isBlank())
+            .map(email -> email.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+    boolean hasIds = requestedStudentIds != null && !requestedStudentIds.isEmpty();
+    boolean hasEmails = !normalizedEmails.isEmpty();
+    if (!hasIds && !hasEmails) {
       return new LinkedHashSet<>(enrolledStudentIds);
     }
+
     Set<Long> subset = new LinkedHashSet<>();
-    for (Long studentId : requestedStudentIds) {
-      if (studentId == null) {
-        continue;
-      }
-      if (!enrolledStudentIds.contains(studentId)) {
+
+    if (hasEmails) {
+      Map<String, Long> emailToUserId = userService.findActiveUserIdsByEmails(normalizedEmails);
+      List<String> missingEmails = normalizedEmails.stream()
+          .filter(email -> !emailToUserId.containsKey(email))
+          .toList();
+      if (!missingEmails.isEmpty()) {
         throw BusinessException.invalidInput(
-            NotificationErrorConstants.STUDENT_NOT_IN_CLASS_SECTIONS,
-            studentId
+            NotificationErrorConstants.TARGET_USER_EMAILS_NOT_FOUND,
+            String.join(", ", missingEmails)
         );
       }
-      subset.add(studentId);
+      for (Map.Entry<String, Long> entry : emailToUserId.entrySet()) {
+        if (!enrolledStudentIds.contains(entry.getValue())) {
+          throw BusinessException.invalidInput(
+              NotificationErrorConstants.STUDENT_NOT_IN_CLASS_SECTIONS,
+              entry.getKey()
+          );
+        }
+        subset.add(entry.getValue());
+      }
+    }
+
+    if (hasIds) {
+      for (Long studentId : requestedStudentIds) {
+        if (studentId == null) {
+          continue;
+        }
+        if (!enrolledStudentIds.contains(studentId)) {
+          throw BusinessException.invalidInput(
+              NotificationErrorConstants.STUDENT_NOT_IN_CLASS_SECTIONS,
+              studentId
+          );
+        }
+        subset.add(studentId);
+      }
     }
     return subset;
   }

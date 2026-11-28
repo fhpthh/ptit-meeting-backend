@@ -28,6 +28,7 @@ phải đọc tài liệu trước khi tạo module mới hoặc thay đổi ki�
 - [semester-management-solution-design.md](./semester-management-solution-design.md): Giải pháp quản lý học kỳ và năm học.
 - [timetable-solution-design.md](./timetable-solution-design.md): Giải pháp import thời khóa biểu tổng (Master Timetable).
 - [pgv-features-specification.md](./pgv-features-specification.md): Đặc tả toàn bộ tính năng, luồng giao diện và hợp đồng API dành cho vai trò Phòng Giáo vụ (`ROLE_STAFF`, `ROLE_ADMIN`).
+- [notification-architecture-and-flow.md](./notification-architecture-and-flow.md): Phân tích kiến trúc, thiết kế DB, sơ đồ luồng (Flowchart/Sequence), Input/Output và Q&A kỹ thuật cho module Notification (Phase 1 – Phase 3).
 
 ## Quy trình bắt buộc dành cho AI
 

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.ptit.meeting.config.NotificationProperties;
 import org.ptit.meeting.exception.BusinessException;
+import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.notification.constant.NotificationErrorConstants;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationCategory;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationPriority;
@@ -42,6 +44,8 @@ class LecturerNotificationServiceTest {
   private NotificationPublisherService publisherService;
   @Mock
   private ClassSectionAudienceService classSectionAudienceService;
+  @Mock
+  private UserService userService;
 
   private LecturerNotificationServiceImpl lecturerService;
 
@@ -52,7 +56,8 @@ class LecturerNotificationServiceTest {
         publisherService,
         new NotificationMapper(),
         new NotificationProperties(),
-        classSectionAudienceService
+        classSectionAudienceService,
+        userService
     );
   }
 
@@ -83,6 +88,7 @@ class LecturerNotificationServiceTest {
         NotificationPriority.NORMAL,
         List.of(100L),
         null,
+        null,
         null
     );
 
@@ -109,12 +115,55 @@ class LecturerNotificationServiceTest {
         NotificationPriority.NORMAL,
         List.of(100L),
         List.of(999L),
+        null,
         null
     );
 
     BusinessException ex = assertThrows(BusinessException.class,
         () -> lecturerService.createAnnouncement(50L, request));
     assertEquals(NotificationErrorConstants.STUDENT_NOT_IN_CLASS_SECTIONS, ex.getStrCode());
+  }
+
+  @Test
+  void createAnnouncement_whenSubsetByStudentEmail_publishesToMatchedEnrolledStudent() {
+    when(classSectionAudienceService.findOwnedClassSectionStudentIds(50L, Set.of(100L)))
+        .thenReturn(Set.of(201L, 202L));
+    when(userService.findActiveUserIdsByEmails(Set.of("sv201@stu.ptit.edu.vn")))
+        .thenReturn(Map.of("sv201@stu.ptit.edu.vn", 201L));
+
+    Notification saved = Notification.builder()
+        .type(NotificationType.LECTURER_ANNOUNCEMENT)
+        .category(NotificationCategory.COURSE)
+        .priority(NotificationPriority.NORMAL)
+        .title("Private reminder")
+        .content("Please submit report")
+        .targetScope(TargetScopeType.CLASS_SECTION)
+        .targetRef("100")
+        .createdBy(50L)
+        .publishedAt(Instant.now())
+        .build();
+    saved.setId("noti-lec-email-1");
+    when(publisherService.publish(any(NotificationPublishCommand.class)))
+        .thenReturn(new NotificationPublishResult(saved, 1L, false));
+
+    LecturerAnnouncementCreateRequest request = new LecturerAnnouncementCreateRequest(
+        "Private reminder",
+        "Please submit report",
+        NotificationCategory.COURSE,
+        NotificationPriority.NORMAL,
+        List.of(100L),
+        null,
+        List.of("SV201@stu.ptit.edu.vn"),
+        null
+    );
+
+    AnnouncementResponse response = lecturerService.createAnnouncement(50L, request);
+
+    assertEquals("noti-lec-email-1", response.id());
+    ArgumentCaptor<NotificationPublishCommand> captor = ArgumentCaptor
+        .forClass(NotificationPublishCommand.class);
+    verify(publisherService).publish(captor.capture());
+    assertEquals(Set.of(201L), captor.getValue().recipientUserIds());
   }
 
   @Test

@@ -1,8 +1,13 @@
 package org.ptit.meeting.modules.auth.service.impl;
 
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
@@ -119,11 +124,40 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Transactional(readOnly = true)
+  public Map<String, Long> findActiveUserIdsByEmails(Collection<String> emails) {
+    if (emails == null || emails.isEmpty()) {
+      return Map.of();
+    }
+    // Normalize emails to lowercase before querying for case-insensitive matching.
+    Set<String> normalizedEmails = emails.stream()
+        .filter(email -> email != null && !email.isBlank())
+        .map(email -> email.trim().toLowerCase(Locale.ROOT))
+        .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+    if (normalizedEmails.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, Long> resolved = new LinkedHashMap<>();
+    for (User user : userRepository.findByEmailLowerInAndStatus(normalizedEmails, UserStatus.ACTIVE)) {
+      if (user.getEmail() != null) {
+        resolved.put(user.getEmail().trim().toLowerCase(Locale.ROOT), user.getId());
+      }
+    }
+    return resolved;
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public List<Long> findActiveUserIdsByDepartment(String department) {
     if (department == null || department.isBlank()) {
       return List.of();
     }
     return userRepository.findIdsByDepartmentIgnoreCaseAndStatus(department.trim(), UserStatus.ACTIVE);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<String> findActiveDepartments() {
+    return userRepository.findDistinctDepartmentsByStatus(UserStatus.ACTIVE);
   }
 
   @Override

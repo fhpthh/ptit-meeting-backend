@@ -4,9 +4,11 @@ import org.ptit.meeting.modules.notification.dto.internal.NotificationStatsRow;
 import org.ptit.meeting.modules.notification.dto.internal.UserNotificationRow;
 import org.ptit.meeting.modules.notification.dto.response.AnnouncementResponse;
 import org.ptit.meeting.modules.notification.dto.response.NotificationPreferenceResponse;
+import org.ptit.meeting.modules.notification.dto.response.NotificationRealtimePayload;
 import org.ptit.meeting.modules.notification.dto.response.UserNotificationResponse;
 import org.ptit.meeting.modules.notification.entity.Notification;
 import org.ptit.meeting.modules.notification.entity.NotificationPreference;
+import org.ptit.meeting.modules.notification.entity.NotificationRecipient;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -81,6 +83,25 @@ public class NotificationMapper {
         preference.getReminderMinutesBefore(),
         preference.isReceivePgvViaZalo(),
         preference.isReceiveLecturerViaZalo()
+    );
+  }
+
+  public NotificationRealtimePayload toRealtimePayload(
+      Notification notification,
+      NotificationRecipient recipient
+  ) {
+    return new NotificationRealtimePayload(
+        recipient.getId(),
+        notification.getId(),
+        notification.getType(),
+        notification.getCategory(),
+        notification.getPriority(),
+        notification.getTitle(),
+        notification.getContent(),
+        notification.getReferenceType(),
+        notification.getReferenceId(),
+        notification.getCreatedBy(),
+        notification.getPublishedAt()
     );
   }
 }

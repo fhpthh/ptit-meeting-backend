@@ -16,10 +16,12 @@ import org.ptit.meeting.modules.auth.service.UserService;
 import org.ptit.meeting.modules.timetable.constant.TimetableErrorConstants;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionOptionDto;
 import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.timetable.repository.ClassEnrollmentRepository;
 import org.ptit.meeting.modules.timetable.repository.ClassSectionRepository;
 import org.ptit.meeting.modules.timetable.service.ClassSectionAudienceService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +76,19 @@ public class ClassSectionAudienceServiceImpl implements ClassSectionAudienceServ
             AccountType.STUDENT,
             UserStatus.ACTIVE
         )
+    );
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ClassSectionOptionDto> findActiveClassSectionOptions(String keyword, int limit) {
+    String normalized = keyword == null || keyword.isBlank() ? null : keyword.trim();
+    int safeLimit = Math.max(1, Math.min(limit, 200));
+    return classSectionRepository.findActiveClassSectionOptions(
+        ClassSectionStatus.ACTIVE,
+        EnrollmentStatus.ENROLLED,
+        normalized,
+        PageRequest.of(0, safeLimit)
     );
   }
 

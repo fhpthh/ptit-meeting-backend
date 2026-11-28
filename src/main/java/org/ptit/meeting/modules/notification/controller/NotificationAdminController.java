@@ -11,6 +11,7 @@ import org.ptit.meeting.modules.notification.constant.enums.NotificationCategory
 import org.ptit.meeting.modules.notification.constant.enums.NotificationPriority;
 import org.ptit.meeting.modules.notification.constant.enums.NotificationType;
 import org.ptit.meeting.modules.notification.dto.request.AdminAnnouncementCreateRequest;
+import org.ptit.meeting.modules.notification.dto.response.AdminAudienceOptionsResponse;
 import org.ptit.meeting.modules.notification.dto.response.AnnouncementResponse;
 import org.ptit.meeting.modules.notification.service.NotificationAdminService;
 import org.ptit.meeting.utils.MessageUtil;
@@ -59,6 +60,14 @@ public class NotificationAdminController {
     return BaseResponse.success(
         notificationAdminService.listAnnouncements(type, category, priority, keyword, page, size)
     );
+  }
+
+  @GetMapping("/audience-options")
+  @Operation(summary = "List active departments and class sections for announcement targeting")
+  public BaseResponse<AdminAudienceOptionsResponse> getAudienceOptions(
+      @RequestParam(required = false) String keyword
+  ) {
+    return BaseResponse.success(notificationAdminService.getAudienceOptions(keyword));
   }
 
   @GetMapping("/{id}")

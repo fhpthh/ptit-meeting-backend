@@ -46,6 +46,8 @@ class NotificationPublisherServiceTest {
   private NotificationDeliveryRepository deliveryRepository;
   @Mock
   private NotificationDispatchService dispatchService;
+  @Mock
+  private NotificationRealtimeService realtimeService;
 
   private NotificationProperties properties;
   private NotificationPublisherServiceImpl publisherService;
@@ -60,6 +62,7 @@ class NotificationPublisherServiceTest {
         recipientRepository,
         deliveryRepository,
         dispatchService,
+        realtimeService,
         properties
     );
   }
@@ -71,6 +74,7 @@ class NotificationPublisherServiceTest {
       saved.setId("noti-1");
       return saved;
     });
+    when(recipientRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
     Set<Long> recipients = new LinkedHashSet<>(java.util.List.of(1L, 2L, 3L));
     NotificationPublishCommand command = new NotificationPublishCommand(
@@ -95,6 +99,7 @@ class NotificationPublisherServiceTest {
     assertEquals(3L, result.totalRecipients());
     assertEquals("Exam schedule", result.notification().getTitle());
     verify(recipientRepository, times(2)).saveAll(anyList());
+    verify(realtimeService).pushToUsers(any(Notification.class), anyList());
     verify(deliveryRepository, never()).saveAll(anyList());
     verify(dispatchService, never()).dispatchPendingDeliveries(any());
   }

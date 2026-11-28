@@ -2,6 +2,8 @@ package org.ptit.meeting.modules.notification.audience;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,19 +29,47 @@ public class ExplicitUsersAudienceResolver implements AudienceResolver {
 
   @Override
   public ResolvedAudience resolve(AudienceResolutionRequest request) {
-    List<Long> requestedIds = request.userIds();
-    if (requestedIds == null || requestedIds.isEmpty()) {
-      throw BusinessException.invalidInput(NotificationErrorConstants.TARGET_USERS_REQUIRED);
-    }
-    Set<Long> normalizedIds = requestedIds.stream()
-        .filter(Objects::nonNull)
-        .collect(Collectors.toCollection(LinkedHashSet::new));
-    if (normalizedIds.isEmpty()) {
+    Set<String> normalizedEmails = request.userEmails() == null
+        ? Set.of()
+        : request.userEmails().stream()
+            .filter(email -> email != null && !email.isBlank())
+            .map(email -> email.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+    Set<Long> normalizedIds = request.userIds() == null
+        ? Set.of()
+        : request.userIds().stream()
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+    if (normalizedEmails.isEmpty() && normalizedIds.isEmpty()) {
       throw BusinessException.invalidInput(NotificationErrorConstants.TARGET_USERS_REQUIRED);
     }
 
-    List<Long> activeUserIds = userService.findActiveUserIdsByIds(normalizedIds);
-    String targetRef = String.valueOf(activeUserIds.size());
-    return new ResolvedAudience(new LinkedHashSet<>(activeUserIds), targetRef);
+    Set<Long> resolvedUserIds = new LinkedHashSet<>();
+
+    // Map recipient emails to active user IDs and fail fast if any email cannot be found.
+    if (!normalizedEmails.isEmpty()) {
+      Map<String, Long> emailToUserId = userService.findActiveUserIdsByEmails(normalizedEmails);
+      List<String> missingEmails = normalizedEmails.stream()
+          .filter(email -> !emailToUserId.containsKey(email))
+          .toList();
+      if (!missingEmails.isEmpty()) {
+        throw BusinessException.invalidInput(
+            NotificationErrorConstants.TARGET_USER_EMAILS_NOT_FOUND,
+            String.join(", ", missingEmails)
+        );
+      }
+      resolvedUserIds.addAll(emailToUserId.values());
+    }
+
+    if (!normalizedIds.isEmpty()) {
+      resolvedUserIds.addAll(userService.findActiveUserIdsByIds(normalizedIds));
+    }
+
+    String targetRef = normalizedEmails.isEmpty()
+        ? String.valueOf(resolvedUserIds.size())
+        : String.join(", ", normalizedEmails);
+    return new ResolvedAudience(resolvedUserIds, targetRef);
   }
 }

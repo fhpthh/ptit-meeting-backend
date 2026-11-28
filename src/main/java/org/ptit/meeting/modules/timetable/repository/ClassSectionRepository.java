@@ -11,6 +11,7 @@ import org.ptit.meeting.modules.timetable.entity.ClassSection;
 import org.ptit.meeting.modules.meeting.constant.enums.SessionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.ClassSectionStatus;
 import org.ptit.meeting.modules.timetable.constant.enums.EnrollmentStatus;
+import org.ptit.meeting.modules.timetable.dto.response.ClassSectionOptionDto;
 import org.ptit.meeting.modules.timetable.dto.response.ClassSectionResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +64,38 @@ public interface ClassSectionRepository extends JpaRepository<ClassSection, Long
       GROUP BY subject.department
       """)
   List<Object[]> countClassSectionsByDepartment(@Param("semesterId") Long semesterId);
+
+  @Query("""
+      SELECT new org.ptit.meeting.modules.timetable.dto.response.ClassSectionOptionDto(
+          section.id,
+          section.classCode,
+          subject.code,
+          subject.name,
+          section.groupNumber,
+          section.lecturerName,
+          COUNT(DISTINCT enrollment.userId)
+      )
+      FROM ClassSection section
+      JOIN Subject subject ON subject.id = section.subjectId
+      LEFT JOIN ClassEnrollment enrollment
+        ON enrollment.classSectionId = section.id
+        AND enrollment.status = :enrollmentStatus
+      WHERE section.status = :activeStatus
+        AND (:keyword IS NULL
+          OR LOWER(section.classCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR LOWER(subject.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR LOWER(subject.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+          OR LOWER(COALESCE(section.lecturerName, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+      GROUP BY section.id, section.classCode, subject.code, subject.name,
+          section.groupNumber, section.lecturerName
+      ORDER BY subject.name ASC, section.classCode ASC
+      """)
+  List<ClassSectionOptionDto> findActiveClassSectionOptions(
+      @Param("activeStatus") ClassSectionStatus activeStatus,
+      @Param("enrollmentStatus") EnrollmentStatus enrollmentStatus,
+      @Param("keyword") String keyword,
+      Pageable pageable
+  );
 
   List<ClassSection> findAllBySemesterId(Long semesterId);
 

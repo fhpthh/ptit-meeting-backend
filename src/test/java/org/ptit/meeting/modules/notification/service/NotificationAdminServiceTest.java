@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,14 +72,16 @@ class NotificationAdminServiceTest {
         publisherService,
         new NotificationMapper(),
         new NotificationProperties(),
-        registry
+        registry,
+        userService,
+        classSectionAudienceService
     );
   }
 
   @Test
   void createAnnouncement_whenRoleScope_resolvesStudentsAndPublishes() {
     when(userService.findActiveUserIdsByAccountTypes(List.of(AccountType.STUDENT)))
-        .thenReturn(List.of(10L, 11L));
+        .thenReturn(List.of(1L, 10L, 11L));
 
     Notification saved = Notification.builder()
         .type(NotificationType.PGV_ANNOUNCEMENT)
@@ -102,6 +105,7 @@ class NotificationAdminServiceTest {
         NotificationPriority.HIGH,
         TargetScopeType.ROLE,
         AccountType.STUDENT,
+        null,
         null,
         null,
         null,
@@ -131,12 +135,80 @@ class NotificationAdminServiceTest {
         null,
         null,
         null,
+        null,
         null
     );
 
     BusinessException ex = assertThrows(BusinessException.class,
         () -> adminService.createAnnouncement(1L, request));
     assertEquals(NotificationErrorConstants.TARGET_ROLE_INVALID, ex.getStrCode());
+  }
+
+  @Test
+  void createAnnouncement_whenUsersScopeByEmails_resolvesActiveUserIds() {
+    when(userService.findActiveUserIdsByEmails(Set.of("sv01@stu.ptit.edu.vn", "gv01@ptit.edu.vn")))
+        .thenReturn(Map.of("sv01@stu.ptit.edu.vn", 21L, "gv01@ptit.edu.vn", 22L));
+
+    Notification saved = Notification.builder()
+        .type(NotificationType.PGV_ANNOUNCEMENT)
+        .category(NotificationCategory.GENERAL)
+        .priority(NotificationPriority.NORMAL)
+        .title("Direct notice")
+        .content("Please check your schedule")
+        .targetScope(TargetScopeType.USERS)
+        .targetRef("sv01@stu.ptit.edu.vn, gv01@ptit.edu.vn")
+        .createdBy(1L)
+        .publishedAt(Instant.now())
+        .build();
+    saved.setId("noti-email-1");
+    when(publisherService.publish(any(NotificationPublishCommand.class)))
+        .thenReturn(new NotificationPublishResult(saved, 2L, false));
+
+    AdminAnnouncementCreateRequest request = new AdminAnnouncementCreateRequest(
+        "Direct notice",
+        "Please check your schedule",
+        NotificationCategory.GENERAL,
+        NotificationPriority.NORMAL,
+        TargetScopeType.USERS,
+        null,
+        null,
+        null,
+        null,
+        List.of("SV01@stu.ptit.edu.vn", "gv01@ptit.edu.vn"),
+        Set.of(DeliveryChannel.IN_APP)
+    );
+
+    AnnouncementResponse response = adminService.createAnnouncement(1L, request);
+
+    assertEquals("noti-email-1", response.id());
+    ArgumentCaptor<NotificationPublishCommand> captor = ArgumentCaptor
+        .forClass(NotificationPublishCommand.class);
+    verify(publisherService).publish(captor.capture());
+    assertEquals(Set.of(21L, 22L), captor.getValue().recipientUserIds());
+  }
+
+  @Test
+  void createAnnouncement_whenUserEmailMissing_throwsNotFoundError() {
+    when(userService.findActiveUserIdsByEmails(Set.of("missing@stu.ptit.edu.vn")))
+        .thenReturn(Map.of());
+
+    AdminAnnouncementCreateRequest request = new AdminAnnouncementCreateRequest(
+        "Direct notice",
+        "Body",
+        NotificationCategory.GENERAL,
+        NotificationPriority.NORMAL,
+        TargetScopeType.USERS,
+        null,
+        null,
+        null,
+        null,
+        List.of("missing@stu.ptit.edu.vn"),
+        null
+    );
+
+    BusinessException ex = assertThrows(BusinessException.class,
+        () -> adminService.createAnnouncement(1L, request));
+    assertEquals(NotificationErrorConstants.TARGET_USER_EMAILS_NOT_FOUND, ex.getStrCode());
   }
 
   @Test
